@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ──────────────────────────────────────
+// Better Auth Models
+// ──────────────────────────────────────
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          String    @default("AGENT")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions    Session[]
+  accounts    Account[]
+
+  assignedTickets Ticket[]        @relation("AssignedTickets")
+  createdTickets  Ticket[]        @relation("CreatedTickets")
+  comments        Comment[]
+  history         TicketHistory[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verification")
+}
+
+// ──────────────────────────────────────
+// Tickets
+// ──────────────────────────────────────
+
+enum TicketType {
+  BUG
+  REQUIREMENT
+  TASK
+  SUPPORT
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Status {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model Ticket {
+  id          String     @id @default(uuid())
+  ticketId    String     @unique // TKT-0001 format
+  title       String
+  description String
+  type        TicketType
+  priority    Priority   @default(MEDIUM)
+  status      Status     @default(OPEN)
+  project     String
+
+  assignedTo   User?   @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  assignedToId String?
+
+  createdBy   User   @relation("CreatedTickets", fields: [createdById], references: [id])
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attachments Attachment[]
+  comments    Comment[]
+  history     TicketHistory[]
+
+  @@map("tickets")
+}
+
+// ──────────────────────────────────────
+// Comments
+// ──────────────────────────────────────
+
+model Comment {
+  id      String @id @default(uuid())
+  content String
+
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  ticketId String
+
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId String
+
+  createdAt DateTime @default(now())
+
+  @@map("comments")
+}
+
+// ──────────────────────────────────────
+// Attachments
+// ──────────────────────────────────────
+
+model Attachment {
+  id       String @id @default(uuid())
+  filename String
+  filepath String
+  mimetype String
+  size     Int
+
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  ticketId String
+
+  createdAt DateTime @default(now())
+
+  @@map("attachments")
+}
+
+// ──────────────────────────────────────
+// Ticket History (audit trail)
+// ──────────────────────────────────────
+
+model TicketHistory {
+  id       String @id @default(uuid())
+  field    String // e.g., "status", "priority", "assignedTo"
+  oldValue String?
+  newValue String?
+
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  ticketId String
+
+  changedBy   User   @relation(fields: [changedById], references: [id])
+  changedById String
+
+  createdAt DateTime @default(now())
+
+  @@map("ticket_history")
+}

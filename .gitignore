@@ -1,0 +1,32 @@
+# Environment files
+.env
+*.env
+.env.*
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Reports (may contain sensitive audit info)
+reports/
+
+# Playwright test output
+tests/test-results/
+tests/playwright-report/
+test-results/
+playwright-report/
+
+# Claude Code
+.claude/

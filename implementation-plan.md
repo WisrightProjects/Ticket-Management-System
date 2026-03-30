@@ -1,0 +1,153 @@
+# Implementation Plan: Basic Ticket Management System
+
+---
+
+## Phase 1: Project Setup & Database
+
+> Get the foundation running — project structure, database, and dev environment.
+
+| #   | Task                                                        | Status |
+| --- | ----------------------------------------------------------- | ------ |
+| 1.1 | Initialize monorepo folder structure (`/client`, `/server`) | [x]    |
+| 1.2 | Setup Node.js + Express.js backend with Bun                 | [x]    |
+| 1.3 | Setup React.js frontend with Vite + Tailwind CSS            | [x]    |
+| 1.4 | Install and configure Prisma v7 with PostgreSQL adapter     | [x]    |
+| 1.5 | Design database schema (users, tickets, comments, history)  | [x]    |
+| 1.6 | Create Prisma schema file and run first migration           | [x]    |
+| 1.7 | Seed database with default Admin user                       | [x]    |
+| 1.8 | Setup Docker Compose for local dev (app + PostgreSQL)       | [ ]    |
+
+**Deliverable:** Backend and frontend running locally, database tables created.
+
+---
+
+## Phase 2: Authentication
+
+> Login, logout, session management, and route protection.
+
+| #   | Task                                                              | Status |
+| --- | ----------------------------------------------------------------- | ------ |
+| 2.1 | Install and configure Better Auth with Prisma adapter             | [x]    |
+| 2.2 | Configure email/password auth (signup disabled)                   | [x]    |
+| 2.3 | Better Auth handles login (`POST /api/auth/sign-in/email`)        | [x]    |
+| 2.4 | Better Auth handles logout (`POST /api/auth/sign-out`)            | [x]    |
+| 2.5 | Better Auth handles session (`GET /api/auth/get-session`)         | [x]    |
+| 2.6 | Add requireAuth middleware to protect routes                      | [x]    |
+| 2.7 | Add requireAdmin middleware (Admin vs Agent)                      | [x]    |
+| 2.8 | Build Login page (react-hook-form + zod + shadcn/ui)              | [x]    |
+| 2.9 | Setup React Router with ProtectedRoute + GuestRoute               | [x]    |
+| 2.10| Handle auth state via Better Auth useSession hook                  | [x]    |
+
+**Deliverable:** Users can log in, sessions are stored in DB, protected routes work.
+
+---
+
+## Phase 3: User Management (Admin)
+
+> Admin can create and manage team members.
+
+| #   | Task                                                        | Status |
+| --- | ----------------------------------------------------------- | ------ |
+| 3.1 | Build create user API (`POST /api/users`)                   | [ ]    |
+| 3.2 | Build list users API (`GET /api/users`)                     | [ ]    |
+| 3.3 | Build update user API (`PUT /api/users/:id`)                | [ ]    |
+| 3.4 | Build deactivate user API (`PATCH /api/users/:id/status`)   | [ ]    |
+| 3.5 | Build User Management page (frontend) — table + add/edit form | [ ]  |
+| 3.6 | Restrict user management pages to Admin role only           | [ ]    |
+
+**Deliverable:** Admin can add, edit, and deactivate users from the UI.
+
+---
+
+## Phase 4: Ticket CRUD
+
+> Core ticket operations — create, read, update.
+
+| #   | Task                                                              | Status |
+| --- | ----------------------------------------------------------------- | ------ |
+| 4.1 | Build create ticket API (`POST /api/tickets`)                     | [ ]    |
+| 4.2 | Auto-generate ticket ID (TKT-0001 format)                        | [ ]    |
+| 4.3 | Build get all tickets API (`GET /api/tickets`) with filters       | [ ]    |
+| 4.4 | Build get single ticket API (`GET /api/tickets/:id`)              | [ ]    |
+| 4.5 | Build update ticket API (`PUT /api/tickets/:id`)                  | [ ]    |
+| 4.6 | Build update ticket status API (`PATCH /api/tickets/:id/status`)  | [ ]    |
+| 4.7 | File upload for attachments (`POST /api/tickets/:id/attachments`) | [ ]    |
+| 4.8 | Build Create Ticket page (frontend) — form with all fields       | [ ]    |
+| 4.9 | Build Ticket List page (frontend) — table with filters & search  | [ ]    |
+| 4.10| Build Ticket Detail page (frontend) — full view + status change  | [ ]    |
+
+**Deliverable:** Users can create, view, filter, search, and update tickets.
+
+---
+
+## Phase 5: Comments & History
+
+> Add collaboration and audit trail to tickets.
+
+| #   | Task                                                              | Status |
+| --- | ----------------------------------------------------------------- | ------ |
+| 5.1 | Build add comment API (`POST /api/tickets/:id/comments`)          | [ ]    |
+| 5.2 | Build list comments API (`GET /api/tickets/:id/comments`)         | [ ]    |
+| 5.3 | Log ticket changes to history table (status, assignment, edits)   | [ ]    |
+| 5.4 | Build get history API (`GET /api/tickets/:id/history`)            | [ ]    |
+| 5.5 | Add comments section to Ticket Detail page (frontend)             | [ ]    |
+| 5.6 | Add history/activity tab to Ticket Detail page (frontend)         | [ ]    |
+
+**Deliverable:** Team can discuss on tickets. Every change is logged and visible.
+
+---
+
+## Phase 6: Dashboard & My Tickets
+
+> Overview and personal views.
+
+| #   | Task                                                           | Status |
+| --- | -------------------------------------------------------------- | ------ |
+| 6.1 | Build dashboard stats API (`GET /api/dashboard/stats`)         | [ ]    |
+| 6.2 | Build recent tickets API (`GET /api/dashboard/recent`)         | [ ]    |
+| 6.3 | Build Dashboard page (frontend) — status counts + recent list  | [ ]    |
+| 6.4 | Build My Tickets page (frontend) — assigned tickets + filters  | [ ]    |
+| 6.5 | Add sidebar/navbar navigation across all pages                 | [ ]    |
+
+**Deliverable:** Users see a summary on login. Agents see their own workload.
+
+---
+
+## Phase 7: Polish & Deployment
+
+> Final cleanup, testing, and Docker deployment.
+
+| #   | Task                                                       | Status |
+| --- | ---------------------------------------------------------- | ------ |
+| 7.1 | Add form validations (frontend + backend)                  | [ ]    |
+| 7.2 | Add error handling and user-friendly error messages        | [ ]    |
+| 7.3 | Add loading states and empty states across all pages       | [ ]    |
+| 7.4 | Make all pages mobile responsive                           | [ ]    |
+| 7.5 | Write Dockerfile for backend                               | [ ]    |
+| 7.6 | Write Dockerfile for frontend                              | [ ]    |
+| 7.7 | Update Docker Compose for production (app + DB)            | [ ]    |
+| 7.8 | Configure Coolify deployment                               | [ ]    |
+| 7.9 | Test full flow end-to-end                                  | [ ]    |
+
+**Deliverable:** System is live, containerized, and deployed via Coolify.
+
+---
+
+## Summary
+
+| Phase | What                      | Tasks | Done | Status      |
+| ----- | ------------------------- | ----- | ---- | ----------- |
+| 1     | Project Setup & Database  | 8     | 7    | 87% Done    |
+| 2     | Authentication            | 10    | 10   | Complete    |
+| 3     | User Management           | 6     | 1    | In Progress |
+| 4     | Ticket CRUD               | 10    | 0    | Not Started |
+| 5     | Comments & History        | 6     | 0    | Not Started |
+| 6     | Dashboard & My Tickets    | 5     | 0    | Not Started |
+| 7     | Polish & Deployment       | 9     | 1    | In Progress |
+| **Total** |                       | **54** | **19** | **35% Complete** |
+
+### Additional Completed (not in original plan)
+- Security audit (14 issues found and fixed)
+- Playwright E2E testing setup with separate test database
+- Shared Navbar component with role-based navigation
+- Admin-only /users route with AdminRoute guard
