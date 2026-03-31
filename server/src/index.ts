@@ -6,6 +6,7 @@ import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
+import userRoutes from "./routes/users.js";
 
 dotenv.config();
 
@@ -55,6 +56,9 @@ function isAuthRateLimited(ip: string): boolean {
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+// API routes
+app.use("/api/users", userRoutes);
 
 // Create HTTP server — route /api/auth to Better Auth, rest to Express
 const betterAuthHandler = toNodeHandler(auth);
