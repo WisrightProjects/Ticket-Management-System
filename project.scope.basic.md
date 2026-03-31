@@ -23,6 +23,7 @@ Build a **simple, internal web-based ticket management system** where team membe
 
 ### 3.2 Ticket Management
 
+\
 - Create a ticket with:
   - Title
   - Description
@@ -92,14 +93,17 @@ Build a **simple, internal web-based ticket management system** where team membe
 
 ## 7. Tech Stack
 
-| Layer     | Technology                          |
-| --------- | ----------------------------------- |
-| Frontend  | React.js + Tailwind CSS             |
-| Backend   | Node.js + Express.js                |
-| Database  | PostgreSQL                          |
-| ORM       | Prisma (migrations + query)         |
-| Auth      | Better Auth (database sessions)      |
-| Hosting   | Docker + Coolify (self-hosted)      |
+| Layer     | Technology                                         |
+| --------- | -------------------------------------------------- |
+| Runtime   | Bun                                                |
+| Frontend  | React 19 + TypeScript + Vite + Tailwind CSS v4     |
+| Backend   | Express.js 5 + TypeScript                          |
+| Database  | PostgreSQL 17                                      |
+| ORM       | Prisma 7 with `@prisma/adapter-pg`                 |
+| Auth      | Better Auth 1.5 (email/password, database sessions)|
+| Shared    | `@tms/core` workspace package (Zod schemas, ROLES) |
+| Testing   | Playwright (E2E, 56 tests) + Vitest (unit, 12 tests)|
+| Hosting   | Docker + Coolify (self-hosted)                     |
 
 ---
 

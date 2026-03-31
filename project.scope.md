@@ -174,6 +174,22 @@ Build a **centralized Ticket Management System** that captures, tracks, assigns,
 | End Users (Agents) | Day-to-day ticket handling              |
 | Clients            | Raise requirements, track ticket status |
 
+## 9a. Actual Tech Stack (Phase 1 Implementation)
+
+| Layer     | Technology                                          |
+| --------- | --------------------------------------------------- |
+| Runtime   | Bun                                                 |
+| Frontend  | React 19 + TypeScript + Vite 8 + Tailwind CSS v4    |
+| Backend   | Express.js 5 + TypeScript                           |
+| Database  | PostgreSQL 17                                       |
+| ORM       | Prisma 7 with `@prisma/adapter-pg`                  |
+| Auth      | Better Auth 1.5 (email/password, database sessions) |
+| Shared    | `@tms/core` workspace package (Zod schemas, ROLES)  |
+| Testing   | Playwright (E2E, 56 tests) + Vitest (unit, 12 tests)|
+| Hosting   | Docker + Coolify (self-hosted, planned)             |
+
+---
+
 ## 10. Milestones (High Level)
 
 | Phase   | Scope                                                    |
