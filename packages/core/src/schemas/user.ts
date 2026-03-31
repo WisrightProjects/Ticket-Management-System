@@ -7,6 +7,12 @@ import { z } from "zod";
 export const USER_ROLES = ["ADMIN", "AGENT"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+// Named role constants — use these instead of string literals
+export const ROLES = {
+  ADMIN: "ADMIN",
+  AGENT: "AGENT",
+} as const satisfies Record<string, UserRole>;
+
 // ──────────────────────────────────────
 // API response schema
 // Used by the client to validate data returned from GET /api/users

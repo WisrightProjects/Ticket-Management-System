@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useSession } from "@/lib/auth-client";
+import { ROLES } from "@tms/core";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Users from "@/pages/Users";
@@ -37,7 +38,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  if ((session.user as any).role !== "ADMIN") {
+  if ((session.user as any).role !== ROLES.ADMIN) {
     return <Navigate to="/" replace />;
   }
 

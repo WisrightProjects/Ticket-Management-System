@@ -3,10 +3,12 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios, { AxiosError } from "axios";
 import {
+  ROLES,
   apiUsersSchema,
   editUserSchema,
   type ApiUser,
   type EditUserInput,
+  type UserRole,
 } from "@tms/core";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
@@ -52,7 +54,7 @@ function Users() {
   // Single form instance for both create and edit — editUserSchema covers both
   const form = useForm<UserForm>({
     resolver: zodResolver(editUserSchema),
-    defaultValues: { name: "", email: "", password: "", role: "AGENT" },
+    defaultValues: { name: "", email: "", password: "", role: ROLES.AGENT },
     mode: "onBlur",
   });
 
@@ -130,7 +132,7 @@ function Users() {
   const openCreateDialog = () => {
     setEditingUser(null);
     setDialogError("");
-    form.reset({ name: "", email: "", password: "", role: "AGENT" });
+    form.reset({ name: "", email: "", password: "", role: ROLES.AGENT });
     setDialogOpen(true);
   };
 
@@ -141,7 +143,7 @@ function Users() {
       name: user.name,
       email: user.email,
       password: "",
-      role: user.role as "ADMIN" | "AGENT",
+      role: user.role as UserRole,
     });
     setDialogOpen(true);
   };
@@ -286,7 +288,7 @@ function Users() {
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={user.role === "ADMIN" ? "default" : "secondary"}
+                        variant={user.role === ROLES.ADMIN ? "default" : "secondary"}
                       >
                         {user.role}
                       </Badge>
@@ -421,7 +423,7 @@ function Users() {
                   value={watchedRole}
                   onValueChange={(val) => {
                     if (val === null) return;
-                    form.setValue("role", val as "ADMIN" | "AGENT", {
+                    form.setValue("role", val as UserRole, {
                       shouldValidate: true,
                     });
                   }}

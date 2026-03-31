@@ -24,7 +24,7 @@ async function loginAsAdmin(page: Page) {
   await fillAndSubmitLogin(page, "admin@wisright.com", "Test@123");
   await expect(page).toHaveURL("/");
   await expect(
-    page.getByRole("heading", { name: "Ticket Management" })
+    page.getByText("Recent Tickets")
   ).toBeVisible();
 }
 
@@ -84,7 +84,7 @@ test.describe("Successful login", () => {
 
     await expect(page).toHaveURL("/");
     await expect(
-      page.getByRole("heading", { name: "Ticket Management" })
+      page.getByText("Recent Tickets")
     ).toBeVisible();
   });
 
@@ -258,7 +258,7 @@ test.describe("Session persistence", () => {
     // Should still be on the dashboard, not redirected to login
     await expect(page).toHaveURL("/");
     await expect(
-      page.getByRole("heading", { name: "Ticket Management" })
+      page.getByText("Recent Tickets")
     ).toBeVisible();
   });
 
@@ -269,7 +269,7 @@ test.describe("Session persistence", () => {
     await page.goto("/");
     await expect(page).toHaveURL("/");
     await expect(
-      page.getByRole("heading", { name: "Ticket Management" })
+      page.getByText("Recent Tickets")
     ).toBeVisible();
   });
 });

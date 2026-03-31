@@ -1,13 +1,14 @@
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useSession, signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
+import { ROLES } from "@tms/core";
 
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: session } = useSession();
 
-  const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const isAdmin = (session?.user as any)?.role === ROLES.ADMIN;
 
   const handleSignOut = async () => {
     await signOut();
