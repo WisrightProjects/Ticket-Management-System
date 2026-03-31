@@ -25,18 +25,18 @@
 
 > Login, logout, session management, and route protection.
 
-| #   | Task                                                              | Status |
-| --- | ----------------------------------------------------------------- | ------ |
-| 2.1 | Install and configure Better Auth with Prisma adapter             | [x]    |
-| 2.2 | Configure email/password auth (signup disabled)                   | [x]    |
-| 2.3 | Better Auth handles login (`POST /api/auth/sign-in/email`)        | [x]    |
-| 2.4 | Better Auth handles logout (`POST /api/auth/sign-out`)            | [x]    |
-| 2.5 | Better Auth handles session (`GET /api/auth/get-session`)         | [x]    |
-| 2.6 | Add requireAuth middleware to protect routes                      | [x]    |
-| 2.7 | Add requireAdmin middleware (Admin vs Agent)                      | [x]    |
-| 2.8 | Build Login page (react-hook-form + zod + shadcn/ui)              | [x]    |
-| 2.9 | Setup React Router with ProtectedRoute + GuestRoute               | [x]    |
-| 2.10| Handle auth state via Better Auth useSession hook                  | [x]    |
+| #    | Task                                                              | Status |
+| ---- | ----------------------------------------------------------------- | ------ |
+| 2.1  | Install and configure Better Auth with Prisma adapter             | [x]    |
+| 2.2  | Configure email/password auth (signup disabled)                   | [x]    |
+| 2.3  | Better Auth handles login (`POST /api/auth/sign-in/email`)        | [x]    |
+| 2.4  | Better Auth handles logout (`POST /api/auth/sign-out`)            | [x]    |
+| 2.5  | Better Auth handles session (`GET /api/auth/get-session`)         | [x]    |
+| 2.6  | Add requireAuth middleware to protect routes                      | [x]    |
+| 2.7  | Add requireAdmin middleware (Admin vs Agent)                      | [x]    |
+| 2.8  | Build Login page (react-hook-form + zod + shadcn/ui)              | [x]    |
+| 2.9  | Setup React Router with ProtectedRoute + GuestRoute + AdminRoute  | [x]    |
+| 2.10 | Handle auth state via Better Auth useSession hook                 | [x]    |
 
 **Deliverable:** Users can log in, sessions are stored in DB, protected routes work.
 
@@ -46,16 +46,16 @@
 
 > Admin can create and manage team members.
 
-| #   | Task                                                        | Status |
-| --- | ----------------------------------------------------------- | ------ |
-| 3.1 | Build create user API (`POST /api/users`)                   | [ ]    |
-| 3.2 | Build list users API (`GET /api/users`)                     | [ ]    |
-| 3.3 | Build update user API (`PUT /api/users/:id`)                | [ ]    |
-| 3.4 | Build deactivate user API (`PATCH /api/users/:id/status`)   | [ ]    |
-| 3.5 | Build User Management page (frontend) — table + add/edit form | [ ]  |
-| 3.6 | Restrict user management pages to Admin role only           | [ ]    |
+| #   | Task                                                              | Status |
+| --- | ----------------------------------------------------------------- | ------ |
+| 3.1 | Build create user API (`POST /api/users`)                         | [x]    |
+| 3.2 | Build list users API (`GET /api/users`)                           | [x]    |
+| 3.3 | Build update user API (`PUT /api/users/:id`)                      | [x]    |
+| 3.4 | Build deactivate/reactivate user API (`PATCH /api/users/:id/status`) | [x] |
+| 3.5 | Build User Management page (frontend) — table + add/edit dialog  | [x]    |
+| 3.6 | Restrict user management pages to Admin role only                 | [x]    |
 
-**Deliverable:** Admin can add, edit, and deactivate users from the UI.
+**Deliverable:** Admin can add, edit, deactivate, and reactivate users from the UI.
 
 ---
 
@@ -63,18 +63,18 @@
 
 > Core ticket operations — create, read, update.
 
-| #   | Task                                                              | Status |
-| --- | ----------------------------------------------------------------- | ------ |
-| 4.1 | Build create ticket API (`POST /api/tickets`)                     | [ ]    |
-| 4.2 | Auto-generate ticket ID (TKT-0001 format)                        | [ ]    |
-| 4.3 | Build get all tickets API (`GET /api/tickets`) with filters       | [ ]    |
-| 4.4 | Build get single ticket API (`GET /api/tickets/:id`)              | [ ]    |
-| 4.5 | Build update ticket API (`PUT /api/tickets/:id`)                  | [ ]    |
-| 4.6 | Build update ticket status API (`PATCH /api/tickets/:id/status`)  | [ ]    |
-| 4.7 | File upload for attachments (`POST /api/tickets/:id/attachments`) | [ ]    |
-| 4.8 | Build Create Ticket page (frontend) — form with all fields       | [ ]    |
-| 4.9 | Build Ticket List page (frontend) — table with filters & search  | [ ]    |
-| 4.10| Build Ticket Detail page (frontend) — full view + status change  | [ ]    |
+| #    | Task                                                              | Status |
+| ---- | ----------------------------------------------------------------- | ------ |
+| 4.1  | Build create ticket API (`POST /api/tickets`)                     | [ ]    |
+| 4.2  | Auto-generate ticket ID (TKT-0001 format)                        | [ ]    |
+| 4.3  | Build get all tickets API (`GET /api/tickets`) with filters       | [ ]    |
+| 4.4  | Build get single ticket API (`GET /api/tickets/:id`)              | [ ]    |
+| 4.5  | Build update ticket API (`PUT /api/tickets/:id`)                  | [ ]    |
+| 4.6  | Build update ticket status API (`PATCH /api/tickets/:id/status`)  | [ ]    |
+| 4.7  | File upload for attachments (`POST /api/tickets/:id/attachments`) | [ ]    |
+| 4.8  | Build Create Ticket page (frontend) — form with all fields       | [ ]    |
+| 4.9  | Build Ticket List page (frontend) — table with filters & search  | [ ]    |
+| 4.10 | Build Ticket Detail page (frontend) — full view + status change  | [ ]    |
 
 **Deliverable:** Users can create, view, filter, search, and update tickets.
 
@@ -119,15 +119,15 @@
 
 | #   | Task                                                       | Status |
 | --- | ---------------------------------------------------------- | ------ |
-| 7.1 | Add form validations (frontend + backend)                  | [ ]    |
-| 7.2 | Add error handling and user-friendly error messages        | [ ]    |
-| 7.3 | Add loading states and empty states across all pages       | [ ]    |
+| 7.1 | Add form validations (frontend + backend)                  | [x]    |
+| 7.2 | Add error handling and user-friendly error messages        | [x]    |
+| 7.3 | Add loading states and empty states across all pages       | [x]    |
 | 7.4 | Make all pages mobile responsive                           | [ ]    |
 | 7.5 | Write Dockerfile for backend                               | [ ]    |
 | 7.6 | Write Dockerfile for frontend                              | [ ]    |
 | 7.7 | Update Docker Compose for production (app + DB)            | [ ]    |
 | 7.8 | Configure Coolify deployment                               | [ ]    |
-| 7.9 | Test full flow end-to-end                                  | [ ]    |
+| 7.9 | Test full flow end-to-end                                  | [x]    |
 
 **Deliverable:** System is live, containerized, and deployed via Coolify.
 
@@ -139,15 +139,19 @@
 | ----- | ------------------------- | ----- | ---- | ----------- |
 | 1     | Project Setup & Database  | 8     | 7    | 87% Done    |
 | 2     | Authentication            | 10    | 10   | Complete    |
-| 3     | User Management           | 6     | 1    | In Progress |
+| 3     | User Management           | 6     | 6    | Complete    |
 | 4     | Ticket CRUD               | 10    | 0    | Not Started |
 | 5     | Comments & History        | 6     | 0    | Not Started |
 | 6     | Dashboard & My Tickets    | 5     | 0    | Not Started |
-| 7     | Polish & Deployment       | 9     | 1    | In Progress |
-| **Total** |                       | **54** | **19** | **35% Complete** |
+| 7     | Polish & Deployment       | 9     | 4    | In Progress |
+| **Total** |                       | **54** | **27** | **50% Complete** |
 
 ### Additional Completed (not in original plan)
-- Security audit (14 issues found and fixed)
-- Playwright E2E testing setup with separate test database
-- Shared Navbar component with role-based navigation
-- Admin-only /users route with AdminRoute guard
+
+- Security audit — 14 issues found and fixed (Prisma import path, rate limiting, error handlers, Zod validation)
+- `@tms/core` shared workspace package — Zod schemas and ROLES constants shared between client and server
+- Playwright E2E test suite — 56 tests across auth and user management
+- Vitest unit tests — 12 tests for create user form
+- Global JSON error handler middleware (fixes HTML 400/500 responses)
+- React Compiler compatibility fixes (useWatch instead of form.watch)
+- CLAUDE.md coding guidelines

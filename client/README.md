@@ -1,73 +1,81 @@
-# React + TypeScript + Vite
+# Client — React Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite 8 + TypeScript frontend for the Ticket Management System.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Tool | Purpose |
+|:-----|:--------|
+| React 19 | UI framework |
+| Vite 8 | Dev server and build tool |
+| TypeScript 5.9 | Type safety |
+| Tailwind CSS 4 | Styling |
+| shadcn/ui (Base UI) | Component library |
+| React Router DOM 7 | Client-side routing |
+| TanStack Query v5 | Server state and caching |
+| React Hook Form 7 | Form state management |
+| Zod 4 | Schema validation |
+| `@tms/core` | Shared schemas and ROLES constants |
 
-## React Compiler
+## Scripts
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# Development server (port 5173)
+bun run dev
 
-## Expanding the ESLint configuration
+# Type check + build
+bun run build
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# Lint
+bun run lint
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Unit tests (run once)
+bun run test:components
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Unit tests (watch mode)
+bun run test:components:watch
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Project structure
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+├── components/
+│   ├── Navbar.tsx              # Top navigation bar
+│   └── ui/                     # shadcn/ui components
+│       ├── badge.tsx
+│       ├── button.tsx
+│       ├── dialog.tsx
+│       ├── input.tsx
+│       ├── label.tsx
+│       ├── select.tsx
+│       ├── skeleton.tsx
+│       └── table.tsx
+├── lib/
+│   ├── auth-client.ts          # Better Auth client instance
+│   └── utils.ts                # cn() utility
+├── pages/
+│   ├── __tests__/
+│   │   └── Users.test.tsx      # Vitest unit tests (12 tests)
+│   ├── Dashboard.tsx
+│   ├── Login.tsx
+│   └── Users.tsx               # User management (Admin only)
+├── App.tsx                     # Routes: ProtectedRoute, AdminRoute, GuestRoute
+├── main.tsx
+└── setupTests.ts               # @testing-library/jest-dom setup
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|:---------|:--------|:------------|
+| `VITE_API_URL` | `""` | API base URL (empty = same origin via Vite proxy) |
+| `VITE_PROXY_TARGET` | `http://localhost:5000` | Backend URL for Vite dev proxy |
+
+## Routing
+
+| Path | Component | Guard |
+|:-----|:----------|:------|
+| `/login` | `Login` | GuestRoute (redirects to `/` if authenticated) |
+| `/` | `Dashboard` | ProtectedRoute (redirects to `/login` if not authenticated) |
+| `/users` | `Users` | AdminRoute (redirects to `/` if not admin) |

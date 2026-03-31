@@ -1,18 +1,19 @@
-# :ticket: Ticket Management System
+# Ticket Management System
 
 A centralized ticket management system for tracking support requests, bugs, and tasks across teams.
 
 ![React](https://img.shields.io/badge/React-19-blue?logo=react)
 ![Express.js](https://img.shields.io/badge/Express.js-5-black?logo=express)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue?logo=typescript)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue?logo=postgresql)
 ![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma)
-![Playwright](https://img.shields.io/badge/Playwright-46_tests-green?logo=playwright)
+![E2E Tests](https://img.shields.io/badge/Playwright-56_tests-green?logo=playwright)
+![Unit Tests](https://img.shields.io/badge/Vitest-12_tests-green?logo=vitest)
 ![License](https://img.shields.io/badge/License-Proprietary-red)
 
 ---
 
-## :clipboard: Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
 - [Key Features](#key-features)
@@ -29,42 +30,46 @@ A centralized ticket management system for tracking support requests, bugs, and 
 
 ---
 
-## :mag: Overview
+## Overview
 
 Ticket Management System is a full-stack application designed to replace fragmented ticket intake (email, chat, spreadsheets) with a single, centralized platform. Built with a React frontend and Express.js backend, it provides role-based access control, real-time dashboard metrics, and a complete audit trail for every ticket change.
 
 ---
 
-## :star2: Key Features
+## Key Features
 
-- **Authentication** -- Email/password login with database-backed sessions (sign-up disabled, admin creates users)
-- **Role-Based Access Control** -- Admin and Agent roles with route-level protection
-- **User Management** -- Admin can create, edit, and deactivate team members
-- **Ticket CRUD** -- Create, view, filter, and update tickets with auto-generated IDs (TKT-0001 format)
-- **Comments & History** -- Threaded comments on tickets with full change audit trail
-- **Dashboard** -- Real-time overview with status counts and recent activity
-- **Security** -- Helmet headers, CORS restrictions, rate limiting, Zod input validation
+- **Authentication** — Email/password login with database-backed sessions (sign-up disabled, admin creates users)
+- **Role-Based Access Control** — Admin and Agent roles with route-level protection
+- **User Management** — Admin can create, edit, deactivate, and reactivate team members
+- **Ticket CRUD** — Create, view, filter, and update tickets with auto-generated IDs (TKT-0001 format)
+- **Comments & History** — Threaded comments on tickets with full change audit trail
+- **Dashboard** — Real-time overview with status counts and recent activity
+- **Security** — Helmet headers, CORS restrictions, rate limiting, Zod input validation
+- **Shared Schemas** — `@tms/core` workspace package shares Zod schemas between client and server
 
 ---
 
-## :wrench: Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |:------|:-----------|
 | **Runtime** | Bun |
-| **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS 4, shadcn/ui |
+| **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS 4, shadcn/ui (Base UI) |
+| **State / Data** | TanStack Query v5 |
 | **Routing** | React Router DOM 7 |
-| **Forms** | React Hook Form + Zod validation |
+| **Forms** | React Hook Form 7 + Zod 4 |
 | **Backend** | Express.js 5, TypeScript |
 | **Database** | PostgreSQL 17 |
-| **ORM** | Prisma 7 |
+| **ORM** | Prisma 7 with `@prisma/adapter-pg` |
 | **Auth** | Better Auth 1.5 (email/password, database sessions) |
 | **Security** | Helmet, express-rate-limit, CORS |
-| **Testing** | Playwright (end-to-end) |
+| **Shared** | `@tms/core` workspace package (Zod schemas, ROLES constants) |
+| **Unit Tests** | Vitest 4 + Testing Library |
+| **E2E Tests** | Playwright |
 
 ---
 
-## :building_construction: Architecture
+## Architecture
 
 ```
 Browser (React SPA)
@@ -82,36 +87,53 @@ Browser (React SPA)
     |                                       |-- requireAuth
     |                                       |-- requireAdmin
     |                                       |-- Helmet + Rate Limiting
+
+packages/core (@tms/core)
+    |-- Shared Zod schemas
+    |-- ROLES constants
+    |-- TypeScript types
+    (imported by both client and server)
 ```
 
 ---
 
-## :file_folder: Project Structure
+## Project Structure
 
 ```
 Ticket-Management-System/
-├── client/                     # React frontend
+├── client/                        # React frontend
 │   ├── src/
-│   │   ├── components/         # Navbar, shadcn/ui components
-│   │   ├── pages/              # Login, Dashboard, Users
-│   │   └── lib/                # Auth client, utilities
-│   ├── vite.config.ts
+│   │   ├── components/            # Navbar, shadcn/ui components
+│   │   ├── pages/                 # Login, Dashboard, Users
+│   │   │   └── __tests__/         # Vitest unit tests
+│   │   └── lib/                   # Auth client, utilities
+│   ├── vite.config.ts             # Vite + Vitest config
 │   └── package.json
-├── server/                     # Express.js backend
+├── server/                        # Express.js backend
 │   ├── src/
-│   │   ├── lib/                # Auth config, Prisma client
-│   │   └── middleware/         # Auth & admin middleware
+│   │   ├── routes/                # users.ts API routes
+│   │   ├── lib/                   # Auth config, Prisma client
+│   │   └── middleware/            # Auth & admin middleware
 │   ├── prisma/
-│   │   ├── schema.prisma       # Database schema
-│   │   ├── migrations/         # SQL migrations
-│   │   └── seed.ts             # Default admin seed
+│   │   ├── schema.prisma          # Database schema
+│   │   ├── migrations/            # SQL migrations
+│   │   └── seed.ts                # Default admin seed
 │   ├── .env.example
 │   └── package.json
-├── tests/                      # Playwright e2e tests
-│   ├── auth.spec.ts            # Authentication tests (46 tests)
-│   ├── example.spec.ts         # Smoke test
-│   ├── global-setup.ts         # Test DB migration & seed
-│   └── global-teardown.ts      # Test DB cleanup
+├── packages/
+│   └── core/                      # @tms/core shared package
+│       ├── src/
+│       │   ├── index.ts           # Re-exports everything
+│       │   └── schemas/
+│       │       └── user.ts        # ROLES, schemas, types
+│       └── SCHEMAS.md             # How to add new schemas
+├── tests/                         # Playwright e2e tests
+│   ├── auth.spec.ts               # Authentication tests (47 tests)
+│   ├── users.spec.ts              # User management tests (9 tests)
+│   ├── example.spec.ts            # Smoke test
+│   ├── global-setup.ts            # Test DB migration & seed
+│   └── global-teardown.ts         # Test DB cleanup
+├── CLAUDE.md                      # Coding guidelines for AI & devs
 ├── playwright.config.ts
 ├── implementation-plan.md
 ├── tech-stack.md
@@ -120,13 +142,13 @@ Ticket-Management-System/
 
 ---
 
-## :rocket: Quick Start
+## Quick Start
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) -- runtime and package manager
-- [PostgreSQL 17](https://www.postgresql.org/) -- running on port 5433
-- [Node.js](https://nodejs.org/) -- required for Playwright
+- [Bun](https://bun.sh/) — runtime and package manager
+- [PostgreSQL 17](https://www.postgresql.org/) — running on port 5433
+- [Node.js](https://nodejs.org/) — required for Playwright
 
 ### 1. Clone the repository
 
@@ -138,14 +160,7 @@ cd Ticket-Management-System
 ### 2. Install dependencies
 
 ```bash
-# Root (Playwright)
 bun install
-
-# Server
-cd server && bun install
-
-# Client
-cd ../client && bun install
 ```
 
 ### 3. Configure environment
@@ -176,10 +191,10 @@ bun run prisma/seed.ts
 ### 5. Start development servers
 
 ```bash
-# Terminal 1 -- Backend (port 5000)
+# Terminal 1 — Backend (port 5000)
 cd server && bun run src/index.ts
 
-# Terminal 2 -- Frontend (port 5173)
+# Terminal 2 — Frontend (port 5173)
 cd client && bun run dev
 ```
 
@@ -187,17 +202,17 @@ Open [http://localhost:5173](http://localhost:5173) to access the application.
 
 ---
 
-## :key: Demo Credentials
+## Demo Credentials
 
 | Role | Email | Password |
 |:-----|:------|:---------|
 | **Admin** | `admin@wisright.com` | `Test@123` |
 
-> Sign-up is disabled. Only admins can create new users.
+> Sign-up is disabled. Only admins can create new users via the User Management page.
 
 ---
 
-## :globe_with_meridians: API Endpoints
+## API Endpoints
 
 ### Authentication
 
@@ -207,23 +222,31 @@ Open [http://localhost:5173](http://localhost:5173) to access the application.
 | `POST` | `/api/auth/sign-out` | Logout and destroy session |
 | `GET` | `/api/auth/get-session` | Get current session info |
 
+### Users (Admin only)
+
+| Method | Endpoint | Description |
+|:-------|:---------|:------------|
+| `GET` | `/api/users` | List all users |
+| `POST` | `/api/users` | Create a new user |
+| `PUT` | `/api/users/:id` | Update user name, email, role, password |
+| `PATCH` | `/api/users/:id/status` | Activate or deactivate a user |
+
 ### System
 
 | Method | Endpoint | Description |
 |:-------|:---------|:------------|
 | `GET` | `/api/health` | Health check |
 
-> More endpoints (users, tickets, comments, dashboard) are being added as part of the implementation plan.
-
 ---
 
-## :floppy_disk: Database Schema
+## Database Schema
 
 ### Models
 
 | Model | Description |
 |:------|:------------|
 | **User** | Email, name, role (ADMIN/AGENT), active status |
+| **Account** | Better Auth credential provider (hashed password) |
 | **Session** | Database-backed auth sessions (7-day expiry, daily refresh) |
 | **Ticket** | Title, description, type, priority, status, assignee, project |
 | **Comment** | Threaded comments on tickets with author |
@@ -234,38 +257,57 @@ Open [http://localhost:5173](http://localhost:5173) to access the application.
 
 | Enum | Values |
 |:-----|:-------|
+| **Role** | `ADMIN` `AGENT` |
 | **TicketType** | `BUG` `REQUIREMENT` `TASK` `SUPPORT` |
 | **Priority** | `LOW` `MEDIUM` `HIGH` `CRITICAL` |
 | **Status** | `OPEN` `IN_PROGRESS` `RESOLVED` `CLOSED` |
 
 ---
 
-## :test_tube: Testing
+## Testing
 
-The project uses **Playwright** for end-to-end testing with a separate test database.
+### Unit Tests (Vitest)
 
 ```bash
-# Run all tests (headless)
+cd client
+
+# Run once
+bun run test:components
+
+# Watch mode
+bun run test:components:watch
+```
+
+| Suite | Tests | Coverage |
+|:------|:------|:---------|
+| Users page rendering | 2 | User list, empty state |
+| Create user form | 10 | Validation, submit, server errors, cancel |
+| **Total** | **12** | |
+
+### E2E Tests (Playwright)
+
+```bash
+# Run all tests headless
 bunx playwright test
 
-# Run with interactive UI
+# Interactive UI
 bunx playwright test --ui
 
-# Run a specific test file
-bunx playwright test tests/auth.spec.ts
+# Specific file
+bunx playwright test tests/users.spec.ts
 
-# View HTML test report
+# View HTML report
 bunx playwright show-report tests/playwright-report
 ```
 
-### Test Infrastructure
+#### Test Infrastructure
 
-- **Test database:** `ticket_management_test` (auto-created, isolated from dev)
+- **Test database:** `ticket_management_test` (isolated from dev)
 - **Test servers:** Backend on port 5001, Frontend on port 5174
-- **Setup:** Migrations + admin user seed before each run
+- **Setup:** Migrations + admin seed before each run
 - **Teardown:** All tables truncated after tests complete
 
-### Test Coverage
+#### E2E Coverage
 
 | Suite | Tests | Coverage |
 |:------|:------|:---------|
@@ -281,11 +323,13 @@ bunx playwright show-report tests/playwright-report
 | Navbar identity | 1 | User name display |
 | Edge cases & security | 12 | SQL injection, XSS, long inputs, signup disabled |
 | Auth API | 3 | Direct endpoint validation |
-| **Total** | **46** | |
+| Smoke test | 1 | App loads |
+| User management — happy paths | 9 | List, create, edit, deactivate, reactivate |
+| **Total** | **56** | |
 
 ---
 
-## :hammer_and_wrench: Development
+## Development
 
 ### Implementation Progress
 
@@ -293,7 +337,7 @@ bunx playwright show-report tests/playwright-report
 |:------|:------------|:-------|
 | 1 | Project Setup & Database | 87% |
 | 2 | Authentication | Complete |
-| 3 | User Management (Admin) | In Progress |
+| 3 | User Management (Admin) | Complete |
 | 4 | Ticket CRUD | Not Started |
 | 5 | Comments & History | Not Started |
 | 6 | Dashboard & My Tickets | Not Started |
@@ -301,8 +345,12 @@ bunx playwright show-report tests/playwright-report
 
 See [implementation-plan.md](implementation-plan.md) for the detailed task breakdown.
 
+### Coding Guidelines
+
+See [CLAUDE.md](CLAUDE.md) for rules on role constants, schema usage, and other conventions enforced in this codebase.
+
 ---
 
-## :page_facing_up: License
+## License
 
 This project is proprietary and for internal use.
