@@ -13,6 +13,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust one proxy hop so req.ip reflects the real client IP (not proxy IP)
+app.set("trust proxy", 1);
+
 // Security headers
 app.use(helmet());
 
@@ -25,23 +28,35 @@ app.use(cors({
 app.use(express.json({ limit: "50kb" }));
 app.use(express.urlencoded({ extended: true, limit: "50kb" }));
 
-// Rate limiting (production only)
+// Rate limiting — applied in all environments (stricter in production)
 const isProd = process.env.NODE_ENV === "production";
 
-if (isProd) {
-  const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100,
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-  app.use("/api", apiLimiter);
-}
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 100 : 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api", apiLimiter);
 
-// Stricter rate limit for auth (production only, applied in http.createServer)
+// Stricter rate limit for auth sign-in endpoint
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 20 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Prune expired entries every 15 minutes to prevent memory leak
 const authRateLimit = new Map<string, { count: number; resetAt: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of authRateLimit) {
+    if (now > entry.resetAt) authRateLimit.delete(ip);
+  }
+}, 15 * 60 * 1000);
+
 function isAuthRateLimited(ip: string): boolean {
-  if (!isProd) return false;
   const now = Date.now();
   const entry = authRateLimit.get(ip);
   if (!entry || now > entry.resetAt) {
@@ -49,7 +64,7 @@ function isAuthRateLimited(ip: string): boolean {
     return false;
   }
   entry.count++;
-  return entry.count > 20; // max 20 auth requests per 15 min
+  return entry.count > (isProd ? 20 : 100);
 }
 
 // Health check
@@ -64,12 +79,16 @@ app.use("/api/users", userRoutes);
 const betterAuthHandler = toNodeHandler(auth);
 const server = http.createServer((req, res) => {
   if (req.url?.startsWith("/api/auth/sign-in")) {
-    const ip = req.socket.remoteAddress || "unknown";
+    const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim()
+      || req.socket.remoteAddress
+      || "unknown";
     if (isAuthRateLimited(ip)) {
       res.writeHead(429, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Too many login attempts. Try again later." }));
       return;
     }
+    betterAuthHandler(req, res);
+    return;
   }
   if (req.url?.startsWith("/api/auth")) {
     betterAuthHandler(req, res);

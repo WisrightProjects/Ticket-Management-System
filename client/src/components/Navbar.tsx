@@ -25,7 +25,9 @@ function Navbar() {
     <header className="border-b bg-card">
       <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
         <div className="flex items-center gap-6">
-          <h1 className="text-xl font-bold">Ticket Management</h1>
+          <Link to="/" className="text-xl font-bold">
+            Ticket Management
+          </Link>
           <nav className="flex items-center gap-4">
             <Link to="/" className={linkClass("/")}>
               Dashboard

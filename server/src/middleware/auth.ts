@@ -17,14 +17,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  (req as any).user = session.user;
-  (req as any).session = session.session;
+  req.user = session.user as any;
+  req.session = session.session as any;
   next();
 }
 
 export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   await requireAuth(req, res, () => {
-    if ((req as any).user?.role !== "ADMIN") {
+    if (req.user?.role !== "ADMIN") {
       res.status(403).json({ error: "Admin access required" });
       return;
     }
