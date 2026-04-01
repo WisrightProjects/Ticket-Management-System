@@ -422,7 +422,6 @@ function Users() {
                 <Select
                   value={watchedRole}
                   onValueChange={(val) => {
-                    if (val === null) return;
                     form.setValue("role", val as UserRole, {
                       shouldValidate: true,
                     });
@@ -432,8 +431,8 @@ function Users() {
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="AGENT">Agent</SelectItem>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value={ROLES.AGENT}>Agent</SelectItem>
+                    <SelectItem value={ROLES.ADMIN}>Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

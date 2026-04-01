@@ -64,17 +64,21 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 // Edit user schema
 // Used by the client form and server route (PUT /api/users/:id)
 // Empty string password is coerced to undefined — omit to keep existing password
+// Uses z.union instead of z.preprocess so the input type is string | undefined
+// (not unknown), which keeps React Hook Form's type inference working correctly.
 // ──────────────────────────────────────
 
 export const editUserSchema = userBaseSchema.extend({
-  password: z.preprocess(
-    (val) => (val === "" ? undefined : val),
-    z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .max(128, "Password must be 128 characters or fewer")
-      .optional()
-  ),
+  password: z
+    .union([
+      z
+        .string()
+        .min(8, "Password must be at least 8 characters")
+        .max(128, "Password must be 128 characters or fewer"),
+      z.literal(""),
+      z.undefined(),
+    ])
+    .transform((val) => (val === "" ? undefined : val)),
 });
 
 export type EditUserInput = z.infer<typeof editUserSchema>;

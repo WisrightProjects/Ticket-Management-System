@@ -7,6 +7,9 @@ import dotenv from "dotenv";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import userRoutes from "./routes/users.js";
+import ticketRoutes from "./routes/tickets.js";
+import webhookRoutes from "./routes/webhooks.js";
+import { requireWebhookSecret } from "./middleware/webhook.js";
 
 dotenv.config();
 
@@ -46,6 +49,8 @@ app.get("/api/health", (_req, res) => {
 
 // API routes
 app.use("/api/users", userRoutes);
+app.use("/api/tickets", ticketRoutes);
+app.use("/api/webhooks", requireWebhookSecret, webhookRoutes);
 
 // Global error handler — converts Express HTML error pages to JSON
 // Must be registered after all routes

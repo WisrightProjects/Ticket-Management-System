@@ -2,3 +2,4 @@
 // Import from "@tms/core" in both client and server
 
 export * from "./schemas/user.js";
+export * from "./schemas/ticket.js";

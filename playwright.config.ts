@@ -1,4 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
+import dotenv from "dotenv";
+
+// Load server/.env into the test process so WEBHOOK_SECRET, TEST_BACKEND_URL,
+// and other vars are available in test files via process.env
+dotenv.config({ path: "./server/.env" });
 
 export default defineConfig({
   testDir: "./tests",
@@ -42,7 +47,7 @@ export default defineConfig({
         ...process.env,
         VITE_API_URL: "http://localhost:5174",
         VITE_APP_URL: "http://localhost:5174",
-        VITE_PROXY_TARGET: "http://localhost:5001",
+        PROXY_TARGET: "http://127.0.0.1:5001",
       },
       reuseExistingServer: !process.env.CI,
     },

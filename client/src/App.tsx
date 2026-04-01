@@ -3,6 +3,7 @@ import { useSession } from "@/lib/auth-client";
 import { ROLES } from "@tms/core";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
+import Tickets from "@/pages/Tickets";
 import Users from "@/pages/Users";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -80,6 +81,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets"
+          element={
+            <ProtectedRoute>
+              <Tickets />
             </ProtectedRoute>
           }
         />

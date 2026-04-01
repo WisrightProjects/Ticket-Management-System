@@ -33,6 +33,9 @@ function Navbar() {
             <Link to="/" className={linkClass("/")}>
               Dashboard
             </Link>
+            <Link to="/tickets" className={linkClass("/tickets")}>
+              Tickets
+            </Link>
             {isAdmin && (
               <Link to="/users" className={linkClass("/users")}>
                 Users
