@@ -15,7 +15,7 @@ vi.mock("@/lib/auth-client", () => ({
   signOut: vi.fn(),
 }));
 
-const mockedAxios = axios as any;
+const mockedAxios = vi.mocked(axios);
 
 // Fresh QueryClient per test — prevents error state leaking between tests
 function makeQueryClient() {

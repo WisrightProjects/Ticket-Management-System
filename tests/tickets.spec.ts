@@ -1,5 +1,5 @@
 import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
-import { type TicketStatus, type TicketCategory } from "@tms/core";
+import { type StatusValue, type TicketTypeValue } from "@tms/core";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -29,7 +29,11 @@ async function goToTicketsPage(page: Page) {
 /** Stub /api/tickets so the page renders without a real backend. */
 async function mockTicketsApi(page: Page) {
   await page.route("**/api/tickets", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: "[]" })
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }),
+    })
   );
 }
 
@@ -43,6 +47,14 @@ async function apiSignIn(request: APIRequestContext): Promise<string> {
   // Extract Set-Cookie header for subsequent requests
   const setCookie = res.headers()["set-cookie"] ?? "";
   return setCookie.split(";")[0]; // "better-auth.session_token=..."
+}
+
+/** GET /api/tickets and return the data array. */
+async function getTickets(request: APIRequestContext, qs = "") {
+  const res = await request.get(`${BASE}/api/tickets${qs ? `?${qs}` : ""}`);
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  return body.data as Record<string, unknown>[];
 }
 
 // ---------------------------------------------------------------------------
@@ -86,19 +98,25 @@ test.describe("GET /api/tickets — API", () => {
     expect(res.status()).toBe(401);
   });
 
-  test("returns 200 with an array when authenticated as admin", async ({ request }) => {
+  test("returns 200 with paginated envelope when authenticated as admin", async ({ request }) => {
     await apiSignIn(request);
-    const res = await request.get(`${BASE}/api/tickets`);
+    const res  = await request.get(`${BASE}/api/tickets`);
     expect(res.status()).toBe(200);
-    expect(Array.isArray(await res.json())).toBe(true);
+    const body = await res.json();
+    expect(body).toHaveProperty("data");
+    expect(body).toHaveProperty("total");
+    expect(body).toHaveProperty("page");
+    expect(body).toHaveProperty("pageSize");
+    expect(body).toHaveProperty("totalPages");
+    expect(Array.isArray(body.data)).toBe(true);
   });
 
-  test("returns an empty array when no tickets exist", async ({ request }) => {
+  test("returns empty data array when no tickets exist", async ({ request }) => {
     await apiSignIn(request);
-    const res = await request.get(`${BASE}/api/tickets`);
-    const tickets = await res.json();
+    const res  = await request.get(`${BASE}/api/tickets`);
+    const body = await res.json();
     // Test DB starts clean — 0 tickets before webhooks suite creates any
-    expect(Array.isArray(tickets)).toBe(true);
+    expect(Array.isArray(body.data)).toBe(true);
   });
 
   test("a ticket created via webhook is returned in the list", async ({ request }) => {
@@ -116,16 +134,14 @@ test.describe("GET /api/tickets — API", () => {
     expect(seedRes.status()).toBe(201);
     const { ticketId } = await seedRes.json();
 
-    const listRes = await request.get(`${BASE}/api/tickets`);
-    const tickets = await listRes.json();
-    const found = tickets.find((t: { ticketId: string }) => t.ticketId === ticketId);
+    const tickets = await getTickets(request);
+    const found   = tickets.find((t) => t.ticketId === ticketId);
     expect(found).toBeDefined();
   });
 
   test("each ticket has all required fields", async ({ request }) => {
     await apiSignIn(request);
-    const res = await request.get(`${BASE}/api/tickets`);
-    const tickets = await res.json();
+    const tickets = await getTickets(request);
     expect(tickets.length).toBeGreaterThan(0);
 
     for (const ticket of tickets) {
@@ -143,30 +159,29 @@ test.describe("GET /api/tickets — API", () => {
     });
 
     await apiSignIn(request);
-    const res = await request.get(`${BASE}/api/tickets`);
-    const tickets = await res.json();
+    const tickets = await getTickets(request);
     expect(tickets.length).toBeGreaterThanOrEqual(2);
 
     for (let i = 1; i < tickets.length; i++) {
-      const prev = new Date(tickets[i - 1].createdAt).getTime();
-      const curr = new Date(tickets[i].createdAt).getTime();
+      const prev = new Date(tickets[i - 1].createdAt as string).getTime();
+      const curr = new Date(tickets[i].createdAt as string).getTime();
       expect(prev).toBeGreaterThanOrEqual(curr);
     }
   });
 
-  test("status values conform to the TicketStatus union type", async ({ request }) => {
+  test("status values conform to StatusValue", async ({ request }) => {
     await apiSignIn(request);
-    const tickets = await (await request.get(`${BASE}/api/tickets`)).json();
-    const valid: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+    const tickets = await getTickets(request);
+    const valid: StatusValue[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
     for (const t of tickets) {
       expect(valid).toContain(t.status);
     }
   });
 
-  test("type values conform to the TicketCategory union type", async ({ request }) => {
+  test("type values conform to TicketTypeValue", async ({ request }) => {
     await apiSignIn(request);
-    const tickets = await (await request.get(`${BASE}/api/tickets`)).json();
-    const valid: TicketCategory[] = ["BUG", "REQUIREMENT", "TASK", "SUPPORT"];
+    const tickets = await getTickets(request);
+    const valid: TicketTypeValue[] = ["BUG", "REQUIREMENT", "TASK", "SUPPORT"];
     for (const t of tickets) {
       expect(valid).toContain(t.type);
     }
@@ -174,9 +189,107 @@ test.describe("GET /api/tickets — API", () => {
 
   test("ticketId follows TKT-XXXX format", async ({ request }) => {
     await apiSignIn(request);
-    const tickets = await (await request.get(`${BASE}/api/tickets`)).json();
+    const tickets = await getTickets(request);
     for (const t of tickets) {
       expect(t.ticketId).toMatch(/^TKT-\d{4}$/);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 3 — GET /api/tickets sorting (direct API calls)
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/tickets — sorting", () => {
+  test("sortBy=createdAt&sortOrder=asc returns oldest ticket first", async ({ request }) => {
+    await apiSignIn(request);
+    const tickets = await getTickets(request, "sortBy=createdAt&sortOrder=asc");
+    expect(tickets.length).toBeGreaterThan(1);
+
+    for (let i = 1; i < tickets.length; i++) {
+      const prev = new Date(tickets[i - 1].createdAt as string).getTime();
+      const curr = new Date(tickets[i].createdAt as string).getTime();
+      expect(prev).toBeLessThanOrEqual(curr);
+    }
+  });
+
+  test("sortBy=createdAt&sortOrder=desc returns newest ticket first (explicit param)", async ({ request }) => {
+    await apiSignIn(request);
+    const tickets = await getTickets(request, "sortBy=createdAt&sortOrder=desc");
+    expect(tickets.length).toBeGreaterThan(1);
+
+    for (let i = 1; i < tickets.length; i++) {
+      const prev = new Date(tickets[i - 1].createdAt as string).getTime();
+      const curr = new Date(tickets[i].createdAt as string).getTime();
+      expect(prev).toBeGreaterThanOrEqual(curr);
+    }
+  });
+
+  test("sortBy=ticketId&sortOrder=asc returns tickets in ascending ID order", async ({ request }) => {
+    await apiSignIn(request);
+    const tickets = await getTickets(request, "sortBy=ticketId&sortOrder=asc");
+    expect(tickets.length).toBeGreaterThan(1);
+
+    for (let i = 1; i < tickets.length; i++) {
+      expect((tickets[i - 1].ticketId as string) <= (tickets[i].ticketId as string)).toBe(true);
+    }
+  });
+
+  test("invalid sortBy value returns 400", async ({ request }) => {
+    await apiSignIn(request);
+    const res = await request.get(`${BASE}/api/tickets?sortBy=invalid`);
+    expect(res.status()).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 4 — GET /api/tickets pagination (direct API calls)
+// ---------------------------------------------------------------------------
+
+test.describe("GET /api/tickets — pagination", () => {
+  test("response includes pagination envelope fields", async ({ request }) => {
+    await apiSignIn(request);
+    const res  = await request.get(`${BASE}/api/tickets`);
+    const body = await res.json();
+    expect(typeof body.total).toBe("number");
+    expect(typeof body.page).toBe("number");
+    expect(typeof body.pageSize).toBe("number");
+    expect(typeof body.totalPages).toBe("number");
+  });
+
+  test("default page is 1 and pageSize is 10", async ({ request }) => {
+    await apiSignIn(request);
+    const res  = await request.get(`${BASE}/api/tickets`);
+    const body = await res.json();
+    expect(body.page).toBe(1);
+    expect(body.pageSize).toBe(10);
+  });
+
+  test("pageSize=1 returns at most 1 ticket", async ({ request }) => {
+    await apiSignIn(request);
+    const res  = await request.get(`${BASE}/api/tickets?pageSize=1`);
+    const body = await res.json();
+    expect(body.data.length).toBeLessThanOrEqual(1);
+    expect(body.pageSize).toBe(1);
+  });
+
+  test("page=2&pageSize=1 returns a different ticket than page=1", async ({ request }) => {
+    await apiSignIn(request);
+    const [r1, r2] = await Promise.all([
+      request.get(`${BASE}/api/tickets?page=1&pageSize=1`),
+      request.get(`${BASE}/api/tickets?page=2&pageSize=1`),
+    ]);
+    const b1 = await r1.json();
+    const b2 = await r2.json();
+    if (b1.total >= 2) {
+      expect(b1.data[0].id).not.toBe(b2.data[0].id);
+    }
+  });
+
+  test("totalPages equals ceil(total / pageSize)", async ({ request }) => {
+    await apiSignIn(request);
+    const res  = await request.get(`${BASE}/api/tickets?pageSize=3`);
+    const body = await res.json();
+    expect(body.totalPages).toBe(Math.ceil(body.total / 3));
   });
 });

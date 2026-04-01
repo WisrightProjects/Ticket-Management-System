@@ -12,9 +12,6 @@ export type TicketTypeValue = (typeof TICKET_TYPES)[number];
 export type PriorityValue   = (typeof PRIORITIES)[number];
 export type StatusValue     = (typeof STATUSES)[number];
 
-export type TicketStatus   = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
-export type TicketCategory = "BUG" | "REQUIREMENT" | "TASK" | "SUPPORT";
-
 // Named constants — use these instead of string literals
 export const TICKET_TYPE = {
   BUG:         "BUG",
@@ -59,6 +56,57 @@ export const apiTicketSchema = z.object({
 
 export const apiTicketsSchema = z.array(apiTicketSchema);
 export type ApiTicket = z.infer<typeof apiTicketSchema>;
+
+// ──────────────────────────────────────
+// Sorting
+// ──────────────────────────────────────
+
+export const SORTABLE_COLUMNS = ["ticketId", "title", "type", "priority", "status", "project", "createdAt"] as const;
+export type SortableColumn = (typeof SORTABLE_COLUMNS)[number];
+
+export const ticketSortSchema = z.object({
+  sortBy:    z.enum(SORTABLE_COLUMNS).default("createdAt"),
+  sortOrder: z.enum(["asc", "desc"]).default("desc"),
+});
+export type TicketSort = z.infer<typeof ticketSortSchema>;
+
+// ──────────────────────────────────────
+// Filtering
+// ──────────────────────────────────────
+
+export const ticketFilterSchema = z.object({
+  search:   z.string().optional(),
+  status:   z.enum(STATUSES).optional(),
+  priority: z.enum(PRIORITIES).optional(),
+  type:     z.enum(TICKET_TYPES).optional(),
+});
+export type TicketFilter = z.infer<typeof ticketFilterSchema>;
+
+// ──────────────────────────────────────
+// Pagination
+// ──────────────────────────────────────
+
+export const paginationSchema = z.object({
+  page:     z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(10),
+});
+export type Pagination = z.infer<typeof paginationSchema>;
+
+export const ticketQuerySchema = ticketSortSchema.merge(ticketFilterSchema).merge(paginationSchema);
+export type TicketQuery = z.infer<typeof ticketQuerySchema>;
+
+// ──────────────────────────────────────
+// Paginated response
+// ──────────────────────────────────────
+
+export const paginatedTicketsSchema = z.object({
+  data:       apiTicketsSchema,
+  total:      z.number(),
+  page:       z.number(),
+  pageSize:   z.number(),
+  totalPages: z.number(),
+});
+export type PaginatedTickets = z.infer<typeof paginatedTicketsSchema>;
 
 // ──────────────────────────────────────
 // Inbound email webhook schema

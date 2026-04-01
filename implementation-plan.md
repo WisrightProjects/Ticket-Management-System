@@ -66,15 +66,15 @@
 | #    | Task                                                              | Status |
 | ---- | ----------------------------------------------------------------- | ------ |
 | 4.1  | Build create ticket API (`POST /api/tickets`)                     | [ ]    |
-| 4.2  | Auto-generate ticket ID (TKT-0001 format)                        | [ ]    |
-| 4.3  | Build get all tickets API (`GET /api/tickets`) with filters       | [ ]    |
-| 4.4  | Build get single ticket API (`GET /api/tickets/:id`)              | [ ]    |
+| 4.2  | Auto-generate ticket ID (TKT-0001 format)                        | [x]    |
+| 4.3  | Build get all tickets API (`GET /api/tickets`) with filters       | [x]    |
+| 4.4  | Build get single ticket API (`GET /api/tickets/:id`)              | [x]    |
 | 4.5  | Build update ticket API (`PUT /api/tickets/:id`)                  | [ ]    |
 | 4.6  | Build update ticket status API (`PATCH /api/tickets/:id/status`)  | [ ]    |
 | 4.7  | File upload for attachments (`POST /api/tickets/:id/attachments`) | [ ]    |
 | 4.8  | Build Create Ticket page (frontend) — form with all fields       | [ ]    |
-| 4.9  | Build Ticket List page (frontend) — table with filters & search  | [ ]    |
-| 4.10 | Build Ticket Detail page (frontend) — full view + status change  | [ ]    |
+| 4.9  | Build Ticket List page (frontend) — table with filters & search  | [x]    |
+| 4.10 | Build Ticket Detail page (frontend) — full view + status change  | [x]    |
 
 **Deliverable:** Users can create, view, filter, search, and update tickets.
 
@@ -140,17 +140,21 @@
 | 1     | Project Setup & Database  | 8     | 7    | 87% Done    |
 | 2     | Authentication            | 10    | 10   | Complete    |
 | 3     | User Management           | 6     | 6    | Complete    |
-| 4     | Ticket CRUD               | 10    | 0    | Not Started |
+| 4     | Ticket CRUD               | 10    | 4    | In Progress |
 | 5     | Comments & History        | 6     | 0    | Not Started |
 | 6     | Dashboard & My Tickets    | 5     | 0    | Not Started |
 | 7     | Polish & Deployment       | 9     | 4    | In Progress |
-| **Total** |                       | **54** | **27** | **50% Complete** |
+| **Total** |                       | **54** | **31** | **57% Complete** |
 
 ### Additional Completed (not in original plan)
 
 - Security audit — 14 issues found and fixed (Prisma import path, rate limiting, error handlers, Zod validation)
-- `@tms/core` shared workspace package — Zod schemas and ROLES constants shared between client and server
-- Playwright E2E test suite — 56 tests across auth and user management
+- `@tms/core` shared workspace package — Zod schemas and ROLES/ticket constants shared between client and server
+- Email webhook endpoint (`POST /api/webhooks/email`) — creates tickets from inbound email payloads with auto-generated IDs
+- Ticket list: server-side sorting (Prisma `orderBy`), filtering (search + status/priority/type), and pagination (`skip`/`take` + count)
+- TanStack Table v8 in client with `manualSorting` and `manualPagination` modes
+- Shared badge helpers (`src/lib/ticket-badges.ts`) — label and variant maps used by both list and detail pages
+- Playwright E2E test suite — 124 tests across auth, user management, webhooks, tickets, and ticket detail
 - Vitest unit tests — 12 tests for create user form
 - Global JSON error handler middleware (fixes HTML 400/500 responses)
 - React Compiler compatibility fixes (useWatch instead of form.watch)

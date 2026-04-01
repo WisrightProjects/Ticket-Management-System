@@ -97,7 +97,7 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 // PUT /api/users/:id — update user name, email, role, and optionally password
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", async (req: Request<{ id: string }>, res: Response) => {
   const id = req.params.id;
 
   const parsed = editUserSchema.safeParse(req.body);
@@ -166,7 +166,7 @@ router.put("/:id", async (req: Request, res: Response) => {
 });
 
 // PATCH /api/users/:id/status — activate/deactivate user
-router.patch("/:id/status", async (req: Request, res: Response) => {
+router.patch("/:id/status", async (req: Request<{ id: string }>, res: Response) => {
   const id = req.params.id;
   const { isActive } = req.body;
 

@@ -47,7 +47,9 @@ src/
 ├── middleware/
 │   └── auth.ts              # requireAuth + requireAdmin middleware
 ├── routes/
-│   └── users.ts             # GET/POST/PUT/PATCH /api/users
+│   ├── users.ts             # GET/POST/PUT/PATCH /api/users
+│   ├── tickets.ts           # GET /api/tickets, GET /api/tickets/:id
+│   └── webhooks.ts          # POST /api/webhooks/email
 └── index.ts                 # Express app, rate limiting, HTTP server
 prisma/
 ├── schema.prisma            # Database schema
@@ -59,12 +61,16 @@ prisma/
 
 | Variable | Description |
 |:---------|:------------|
-| `PORT` | Server port (default: `5000`) |
+| `PORT` | Server port (default: `4000`) |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `BETTER_AUTH_SECRET` | Secret key (min 32 chars) |
-| `BETTER_AUTH_URL` | Backend base URL (e.g. `http://localhost:5000`) |
+| `BETTER_AUTH_URL` | Backend base URL (e.g. `http://localhost:4000`) |
 | `CLIENT_URL` | Frontend origin for CORS (e.g. `http://localhost:5173`) |
 | `NODE_ENV` | `development` or `production` |
+| `TEST_BACKEND_URL` | Backend URL used by Playwright tests (e.g. `http://localhost:5001`) |
+| `WEBHOOK_SECRET` | Optional secret to guard `POST /api/webhooks/*` (leave blank to disable) |
+| `ADMIN_EMAIL` | Seed admin email |
+| `ADMIN_PASSWORD` | Seed admin password |
 
 Copy `.env.example` to `.env` to get started.
 
@@ -80,6 +86,9 @@ Copy `.env.example` to `.env` to get started.
 | `POST` | `/api/users` | Admin | Create user |
 | `PUT` | `/api/users/:id` | Admin | Update user |
 | `PATCH` | `/api/users/:id/status` | Admin | Toggle active status |
+| `GET` | `/api/tickets` | Session | List tickets (sort/filter/paginate via query params) |
+| `GET` | `/api/tickets/:id` | Session | Get single ticket by ticketId (e.g. `TKT-0001`) |
+| `POST` | `/api/webhooks/email` | Optional secret | Create ticket from inbound email payload |
 
 ## Notes
 

@@ -9,12 +9,15 @@ packages/core/
 ├── src/
 │   ├── index.ts              ← re-exports everything (import from "@tms/core")
 │   └── schemas/
-│       └── user.ts           ← ROLES, USER_ROLES, user schemas and types
+│       ├── user.ts           ← ROLES, USER_ROLES, user schemas and types
+│       └── ticket.ts         ← ticket constants, schemas, and types
 ├── package.json
 └── tsconfig.json
 ```
 
 ## Current exports
+
+### User (`schemas/user.ts`)
 
 | Export | Type | Description |
 |:-------|:-----|:------------|
@@ -28,6 +31,33 @@ packages/core/
 | `CreateUserInput` | `type` | Inferred from `createUserSchema` |
 | `editUserSchema` | Zod schema | Validates `PUT /api/users/:id` body and the edit user form |
 | `EditUserInput` | `type` | Inferred from `editUserSchema` |
+
+### Ticket (`schemas/ticket.ts`)
+
+| Export | Type | Description |
+|:-------|:-----|:------------|
+| `TICKET_TYPES` | `const` tuple | `["BUG","REQUIREMENT","TASK","SUPPORT"]` |
+| `PRIORITIES` | `const` tuple | `["LOW","MEDIUM","HIGH","CRITICAL"]` |
+| `STATUSES` | `const` tuple | `["OPEN","IN_PROGRESS","RESOLVED","CLOSED"]` |
+| `TICKET_TYPE` | `const` object | Named constants — use instead of string literals |
+| `PRIORITY` | `const` object | Named constants — use instead of string literals |
+| `STATUS` | `const` object | Named constants — use instead of string literals |
+| `TicketTypeValue` | `type` | `"BUG" \| "REQUIREMENT" \| "TASK" \| "SUPPORT"` |
+| `PriorityValue` | `type` | `"LOW" \| "MEDIUM" \| "HIGH" \| "CRITICAL"` |
+| `StatusValue` | `type` | `"OPEN" \| "IN_PROGRESS" \| "RESOLVED" \| "CLOSED"` |
+| `apiTicketSchema` | Zod schema | Validates ticket objects from `GET /api/tickets` and `GET /api/tickets/:id` |
+| `apiTicketsSchema` | Zod schema | Array of `apiTicketSchema` |
+| `ApiTicket` | `type` | Inferred from `apiTicketSchema` |
+| `SORTABLE_COLUMNS` | `const` tuple | Columns allowed in `sortBy` query param |
+| `ticketSortSchema` | Zod schema | Validates `sortBy` + `sortOrder` query params |
+| `ticketFilterSchema` | Zod schema | Validates `search`, `status`, `priority`, `type` query params |
+| `paginationSchema` | Zod schema | Validates `page` + `pageSize` query params (coerced from strings) |
+| `ticketQuerySchema` | Zod schema | Merged sort + filter + pagination schema for `GET /api/tickets` |
+| `TicketQuery` | `type` | Inferred from `ticketQuerySchema` |
+| `paginatedTicketsSchema` | Zod schema | Validates paginated list response `{ data, total, page, pageSize, totalPages }` |
+| `PaginatedTickets` | `type` | Inferred from `paginatedTicketsSchema` |
+| `inboundEmailSchema` | Zod schema | Validates `POST /api/webhooks/email` body |
+| `InboundEmail` | `type` | Inferred from `inboundEmailSchema` |
 
 ## Using ROLES (important)
 

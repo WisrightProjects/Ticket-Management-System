@@ -1,9 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useSession } from "@/lib/auth-client";
-import { ROLES } from "@tms/core";
+import { ROLES, type UserRole } from "@tms/core";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Tickets from "@/pages/Tickets";
+import TicketDetail from "@/pages/TicketDetail";
 import Users from "@/pages/Users";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -39,7 +40,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  if ((session.user as any).role !== ROLES.ADMIN) {
+  if ((session.user as { role: UserRole }).role !== ROLES.ADMIN) {
     return <Navigate to="/" replace />;
   }
 
@@ -89,6 +90,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Tickets />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets/:id"
+          element={
+            <ProtectedRoute>
+              <TicketDetail />
             </ProtectedRoute>
           }
         />

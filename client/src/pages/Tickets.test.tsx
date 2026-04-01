@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TICKET_TYPE, PRIORITY, STATUS, type ApiTicket } from "@tms/core";
@@ -69,8 +70,12 @@ function renderTickets(queryClient = makeQueryClient()) {
   );
 }
 
+function makePage(tickets: ApiTicket[]) {
+  return { data: tickets, total: tickets.length, page: 1, pageSize: 10, totalPages: 1 };
+}
+
 async function resolveWithTickets(tickets: ApiTicket[]) {
-  mockedGet.mockResolvedValueOnce({ data: tickets });
+  mockedGet.mockResolvedValueOnce({ data: makePage(tickets) });
 }
 
 // ---------------------------------------------------------------------------
@@ -225,5 +230,93 @@ describe("Tickets page — component", () => {
     renderTickets();
     await screen.findByText("TKT-0042");
     expect(screen.queryByText(/Assigned to/i)).not.toBeInTheDocument();
+  });
+});
+
+// ─── Sorting ──────────────────────────────────────────────────────────────────
+
+describe("Tickets page — sorting", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // All fetches resolve with a single ticket throughout sorting tests
+    mockedGet.mockResolvedValue({ data: makePage([TICKET_1]) });
+  });
+
+  it("initial fetch sends sortBy=createdAt&sortOrder=desc", async () => {
+    renderTickets();
+    await screen.findByText("TKT-0042");
+    expect(mockedGet).toHaveBeenCalledWith(
+      expect.stringContaining("sortBy=createdAt&sortOrder=desc"),
+      expect.any(Object)
+    );
+  });
+
+  it("shows 'newest first' subtitle by default", async () => {
+    renderTickets();
+    expect(await screen.findByText(/newest first/i)).toBeInTheDocument();
+  });
+
+  it("clicking Priority column sends sortBy=priority&sortOrder=asc", async () => {
+    renderTickets();
+    await screen.findByText("TKT-0042");
+
+    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+
+    await waitFor(() => {
+      expect(mockedGet).toHaveBeenLastCalledWith(
+        expect.stringContaining("sortBy=priority&sortOrder=asc"),
+        expect.any(Object)
+      );
+    });
+  });
+
+  it("clicking Priority column twice sends sortOrder=desc", async () => {
+    renderTickets();
+    await screen.findByText("TKT-0042");
+
+    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await waitFor(() =>
+      expect(mockedGet).toHaveBeenLastCalledWith(
+        expect.stringContaining("sortOrder=asc"),
+        expect.any(Object)
+      )
+    );
+
+    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await waitFor(() => {
+      expect(mockedGet).toHaveBeenLastCalledWith(
+        expect.stringContaining("sortBy=priority&sortOrder=desc"),
+        expect.any(Object)
+      );
+    });
+  });
+
+  it("subtitle updates to 'sorted by priority (A→Z)' after first click", async () => {
+    renderTickets();
+    await screen.findByText("TKT-0042");
+
+    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+
+    expect(await screen.findByText(/sorted by priority.*A→Z/)).toBeInTheDocument();
+  });
+
+  it("subtitle updates to 'sorted by priority (Z→A)' after second click", async () => {
+    renderTickets();
+    await screen.findByText("TKT-0042");
+
+    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await screen.findByText(/A→Z/);
+
+    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+
+    expect(await screen.findByText(/Z→A/)).toBeInTheDocument();
+  });
+
+  it("Title column header has no cursor-pointer (sorting disabled)", async () => {
+    renderTickets();
+    await screen.findByText("TKT-0042");
+
+    expect(screen.getByRole("columnheader", { name: "Title" })).not.toHaveClass("cursor-pointer");
+    expect(screen.getByRole("columnheader", { name: "Priority" })).toHaveClass("cursor-pointer");
   });
 });

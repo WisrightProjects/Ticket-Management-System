@@ -185,7 +185,7 @@ Build a **centralized Ticket Management System** that captures, tracks, assigns,
 | ORM       | Prisma 7 with `@prisma/adapter-pg`                  |
 | Auth      | Better Auth 1.5 (email/password, database sessions) |
 | Shared    | `@tms/core` workspace package (Zod schemas, ROLES)  |
-| Testing   | Playwright (E2E, 56 tests) + Vitest (unit, 12 tests)|
+| Testing   | Playwright (E2E, 124 tests) + Vitest (unit, 12 tests)|
 | Hosting   | Docker + Coolify (self-hosted, planned)             |
 
 ---

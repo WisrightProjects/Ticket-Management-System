@@ -12,6 +12,7 @@
 - **shadcn/ui** — component library built on `@base-ui/react` (Button, Card, Input, Label, Badge, Dialog, Select, Table, Skeleton)
 - **React Router DOM** (v7) — client-side routing with ProtectedRoute, AdminRoute, GuestRoute
 - **TanStack Query** (v5) — server state, caching, mutations
+- **TanStack Table** (v8) — headless table with `manualSorting` and `manualPagination`
 - **React Hook Form** (v7) — form state management
 - **Zod** (v4) — schema validation
 - **Vite** (v8) — build tool and dev server
@@ -28,9 +29,10 @@
 ## Shared
 
 - **`@tms/core`** — internal workspace package
-  - Zod schemas: `createUserSchema`, `editUserSchema`, `apiUserSchema`
-  - Constants: `ROLES`, `USER_ROLES`
-  - Types: `UserRole`, `ApiUser`, `CreateUserInput`, `EditUserInput`
+  - User schemas: `createUserSchema`, `editUserSchema`, `apiUserSchema`
+  - Ticket schemas: `apiTicketSchema`, `paginatedTicketsSchema`, `ticketQuerySchema`, `inboundEmailSchema`
+  - Constants: `ROLES`, `USER_ROLES`, `TICKET_TYPE`, `PRIORITY`, `STATUS`, `TICKET_TYPES`, `PRIORITIES`, `STATUSES`, `SORTABLE_COLUMNS`
+  - Types: `UserRole`, `ApiUser`, `ApiTicket`, `PaginatedTickets`, `TicketTypeValue`, `PriorityValue`, `StatusValue`
 
 ## Database
 
@@ -75,7 +77,8 @@
 - Separate test database (`ticket_management_test`)
 - Global setup: migrations + admin seed before each run
 - Global teardown: all tables truncated after tests complete
-- 56 tests across authentication (47) and user management (9)
+- 124 tests across authentication (46), user management (9), webhooks (28), tickets (21), ticket detail (19), smoke (1)
+- `TEST_BACKEND_URL` in `server/.env` must point to the test backend port (5001) for UI tests to resolve correctly
 
 ## Deployment (Planned)
 

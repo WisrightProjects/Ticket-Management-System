@@ -13,6 +13,7 @@ React 19 + Vite 8 + TypeScript frontend for the Ticket Management System.
 | shadcn/ui (Base UI) | Component library |
 | React Router DOM 7 | Client-side routing |
 | TanStack Query v5 | Server state and caching |
+| TanStack Table v8 | Headless table (manualSorting + manualPagination) |
 | React Hook Form 7 | Form state management |
 | Zod 4 | Schema validation |
 | `@tms/core` | Shared schemas and ROLES constants |
@@ -53,12 +54,16 @@ src/
 │       └── table.tsx
 ├── lib/
 │   ├── auth-client.ts          # Better Auth client instance
+│   ├── ticket-badges.ts        # Badge variants + label maps for type/priority/status
 │   └── utils.ts                # cn() utility
 ├── pages/
 │   ├── __tests__/
-│   │   └── Users.test.tsx      # Vitest unit tests (12 tests)
+│   │   ├── Users.test.tsx      # Vitest unit tests — create user form (12 tests)
+│   │   └── Tickets.test.tsx    # Vitest unit tests — ticket list
 │   ├── Dashboard.tsx
 │   ├── Login.tsx
+│   ├── TicketDetail.tsx        # Single ticket view (route: /tickets/:id)
+│   ├── Tickets.tsx             # Paginated, sortable, filterable ticket table
 │   └── Users.tsx               # User management (Admin only)
 ├── App.tsx                     # Routes: ProtectedRoute, AdminRoute, GuestRoute
 ├── main.tsx
@@ -79,3 +84,5 @@ src/
 | `/login` | `Login` | GuestRoute (redirects to `/` if authenticated) |
 | `/` | `Dashboard` | ProtectedRoute (redirects to `/login` if not authenticated) |
 | `/users` | `Users` | AdminRoute (redirects to `/` if not admin) |
+| `/tickets` | `Tickets` | ProtectedRoute |
+| `/tickets/:id` | `TicketDetail` | ProtectedRoute |
