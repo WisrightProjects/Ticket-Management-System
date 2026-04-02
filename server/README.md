@@ -45,7 +45,8 @@ src/
 │   ├── auth.ts              # Better Auth configuration
 │   └── prisma.ts            # Prisma client with @prisma/adapter-pg
 ├── middleware/
-│   └── auth.ts              # requireAuth + requireAdmin middleware
+│   ├── auth.ts              # requireAuth + requireAdmin middleware
+│   └── webhook.ts           # requireWebhookSecret middleware
 ├── routes/
 │   ├── users.ts             # GET/POST/PUT/PATCH /api/users
 │   ├── tickets.ts           # GET /api/tickets, GET /api/tickets/:id

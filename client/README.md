@@ -46,6 +46,7 @@ src/
 │   └── ui/                     # shadcn/ui components
 │       ├── badge.tsx
 │       ├── button.tsx
+│       ├── card.tsx
 │       ├── dialog.tsx
 │       ├── input.tsx
 │       ├── label.tsx
@@ -58,11 +59,11 @@ src/
 │   └── utils.ts                # cn() utility
 ├── pages/
 │   ├── __tests__/
-│   │   ├── Users.test.tsx      # Vitest unit tests — create user form (12 tests)
-│   │   └── Tickets.test.tsx    # Vitest unit tests — ticket list
+│   │   └── Users.test.tsx      # Vitest unit tests — create user form (12 tests)
 │   ├── Dashboard.tsx
 │   ├── Login.tsx
 │   ├── TicketDetail.tsx        # Single ticket view (route: /tickets/:id)
+│   ├── Tickets.test.tsx        # Vitest unit tests — ticket list
 │   ├── Tickets.tsx             # Paginated, sortable, filterable ticket table
 │   └── Users.tsx               # User management (Admin only)
 ├── App.tsx                     # Routes: ProtectedRoute, AdminRoute, GuestRoute
