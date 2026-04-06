@@ -33,7 +33,10 @@ function readKnowledgeBase(): string {
 async function processJob(job: Job<AutoResolveJobData>): Promise<void> {
   const { ticketDbId, ticketId, subject, body, adminId, customerName } = job.data;
 
-  if (!process.env.MOONSHOT_API_KEY) return;
+  if (!process.env.MOONSHOT_API_KEY) {
+    await prisma.ticket.update({ where: { id: ticketDbId }, data: { status: STATUS.OPEN } });
+    return;
+  }
 
   const kb = readKnowledgeBase();
   if (!kb) {

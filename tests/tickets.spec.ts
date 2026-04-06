@@ -134,8 +134,15 @@ test.describe("GET /api/tickets — API", () => {
     expect(seedRes.status()).toBe(201);
     const { ticketId } = await seedRes.json();
 
-    const tickets = await getTickets(request);
-    const found   = tickets.find((t) => t.ticketId === ticketId);
+    // Ticket starts as NEW (hidden). Wait up to 8s for the auto-resolve worker
+    // to process it and move it to OPEN (visible in the list).
+    let found: Record<string, unknown> | undefined;
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const tickets = await getTickets(request);
+      found = tickets.find((t) => t.ticketId === ticketId);
+      if (found) break;
+    }
     expect(found).toBeDefined();
   });
 
