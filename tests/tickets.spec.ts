@@ -28,7 +28,7 @@ async function goToTicketsPage(page: Page) {
 
 /** Stub /api/tickets so the page renders without a real backend. */
 async function mockTicketsApi(page: Page) {
-  await page.route("**/api/tickets", (route) =>
+  await page.route(/\/api\/tickets(\?.*)?$/, (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
