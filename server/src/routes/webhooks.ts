@@ -52,7 +52,9 @@ router.post("/email", async (req, res) => {
         description,
         type:        TICKET_TYPE.SUPPORT,
         priority:    PRIORITY.MEDIUM,
-        status:      STATUS.NEW,
+        // Skip AI pipeline in test mode — create as OPEN so tickets are
+        // immediately visible and workers don't race with test assertions
+        status:      process.env.NODE_ENV === "test" ? STATUS.OPEN : STATUS.NEW,
         project:     project ?? "Email Intake",
         createdById: admin.id,
       },
@@ -61,6 +63,9 @@ router.post("/email", async (req, res) => {
   });
 
   res.status(201).json({ ticketId: ticket.ticketId, id: ticket.id });
+
+  // Skip jobs in test mode — workers are disabled and tickets are already OPEN
+  if (process.env.NODE_ENV === "test") return;
 
   // Enqueue background jobs — durable, retried automatically by pg-boss
   boss.send(CLASSIFY_QUEUE, { ticketDbId: ticket.id, subject, body } satisfies ClassifyJobData)

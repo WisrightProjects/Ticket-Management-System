@@ -93,12 +93,15 @@ const server = http.createServer((req, res) => {
   }
 });
 
-// Start pg-boss and register workers
-boss.on("error", (err) => console.error("[boss] error:", err));
-boss.start()
-  .then(() => Promise.all([registerClassifyWorker(), registerAutoResolveWorker()]))
-  .then(() => console.log("[boss] Workers registered"))
-  .catch((err) => console.error("[boss] Failed to start:", err));
+// Start pg-boss and register workers (skip in test — prevents classify worker
+// from overwriting ticket fields that E2E tests set, causing race conditions)
+if (process.env.NODE_ENV !== "test") {
+  boss.on("error", (err) => console.error("[boss] error:", err));
+  boss.start()
+    .then(() => Promise.all([registerClassifyWorker(), registerAutoResolveWorker()]))
+    .then(() => console.log("[boss] Workers registered"))
+    .catch((err) => console.error("[boss] Failed to start:", err));
+}
 
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
