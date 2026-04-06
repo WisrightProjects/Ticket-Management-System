@@ -117,7 +117,7 @@ export type PaginatedTickets = z.infer<typeof paginatedTicketsSchema>;
 
 export const inboundEmailSchema = z.object({
   from:    z.string().email("Must be a valid email address"),
-  name:    z.string().optional(),
+  name:    z.string().max(255).optional(),
   subject: z.string().min(1, "Subject is required").max(255, "Subject must be 255 characters or fewer"),
   body:    z.string().min(1, "Body is required").max(10000, "Body must be 10000 characters or fewer"),
   project: z.string().min(1).max(100).optional(),

@@ -1,4 +1,5 @@
 import { hashPassword } from "better-auth/crypto";
+import { ROLES } from "@tms/core";
 import prisma from "../src/lib/prisma.js";
 
 async function main() {
@@ -23,7 +24,7 @@ async function main() {
         id: userId,
         name: "Admin",
         email,
-        role: "ADMIN",
+        role: ROLES.ADMIN,
         emailVerified: true,
         isActive: true,
       },
@@ -51,7 +52,7 @@ async function main() {
         id: crypto.randomUUID(),
         name: "AI",
         email: AI_AGENT_EMAIL,
-        role: "AGENT",
+        role: ROLES.AGENT,
         emailVerified: true,
         isActive: true,
       },
