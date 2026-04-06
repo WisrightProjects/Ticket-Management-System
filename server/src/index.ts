@@ -10,6 +10,9 @@ import userRoutes from "./routes/users.js";
 import ticketRoutes from "./routes/tickets.js";
 import webhookRoutes from "./routes/webhooks.js";
 import { requireWebhookSecret } from "./middleware/webhook.js";
+import boss from "./lib/boss.js";
+import { registerClassifyWorker } from "./workers/classify.js";
+import { registerAutoResolveWorker } from "./workers/auto-resolve.js";
 
 dotenv.config();
 
@@ -89,6 +92,13 @@ const server = http.createServer((req, res) => {
     app(req, res);
   }
 });
+
+// Start pg-boss and register workers
+boss.on("error", (err) => console.error("[boss] error:", err));
+boss.start()
+  .then(() => Promise.all([registerClassifyWorker(), registerAutoResolveWorker()]))
+  .then(() => console.log("[boss] Workers registered"))
+  .catch((err) => console.error("[boss] Failed to start:", err));
 
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

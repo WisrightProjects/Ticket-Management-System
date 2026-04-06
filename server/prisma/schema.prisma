@@ -100,8 +100,10 @@ enum Priority {
 }
 
 enum Status {
+  NEW
   OPEN
   IN_PROGRESS
+  PROCESSING
   RESOLVED
   CLOSED
 }
@@ -113,7 +115,7 @@ model Ticket {
   description String
   type        TicketType
   priority    Priority   @default(MEDIUM)
-  status      Status     @default(OPEN)
+  status      Status     @default(NEW)
   project     String
 
   assignedTo   User?   @relation("AssignedTickets", fields: [assignedToId], references: [id])

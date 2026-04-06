@@ -312,3 +312,100 @@ describe("TicketReplies — query invalidation", () => {
     expect(finalGetCount).toBe(initialGetCount); // no extra refetch
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 5 — Polish button
+// ---------------------------------------------------------------------------
+
+describe("TicketReplies — Polish button", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupGetEmpty();
+  });
+
+  it("renders the Polish button", async () => {
+    renderReplies();
+    await screen.findByText("Replies");
+    expect(screen.getByRole("button", { name: /Polish/i })).toBeInTheDocument();
+  });
+
+  it("Polish button is disabled when textarea is empty", async () => {
+    renderReplies();
+    await screen.findByText("Replies");
+    expect(screen.getByRole("button", { name: /Polish/i })).toBeDisabled();
+  });
+
+  it("Polish button is enabled after typing content", async () => {
+    renderReplies();
+    await screen.findByText("Replies");
+    await userEvent.type(screen.getByPlaceholderText("Write a reply…"), "fix the issue");
+    expect(screen.getByRole("button", { name: /Polish/i })).toBeEnabled();
+  });
+
+  it("clicking Polish calls POST to /polish with current content", async () => {
+    mockedAxios.post = vi.fn().mockResolvedValue({ data: { polished: "We have resolved the issue." } });
+
+    renderReplies();
+    await screen.findByText("Replies");
+
+    await userEvent.type(screen.getByPlaceholderText("Write a reply…"), "fix the issue");
+    await userEvent.click(screen.getByRole("button", { name: /Polish/i }));
+
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining("/api/tickets/TKT-0001/polish"),
+        { content: "fix the issue" },
+        expect.any(Object)
+      );
+    });
+  });
+
+  it("replaces textarea content with polished text on success", async () => {
+    mockedAxios.post = vi.fn().mockResolvedValue({ data: { polished: "We have resolved the issue." } });
+
+    renderReplies();
+    await screen.findByText("Replies");
+
+    const textarea = screen.getByPlaceholderText("Write a reply…") as HTMLTextAreaElement;
+    await userEvent.type(textarea, "fix the issue");
+    await userEvent.click(screen.getByRole("button", { name: /Polish/i }));
+
+    await waitFor(() => expect(textarea.value).toBe("We have resolved the issue."));
+  });
+
+  it("shows error message when Polish fails", async () => {
+    mockedAxios.post = vi.fn().mockRejectedValue(new Error("AI error"));
+
+    renderReplies();
+    await screen.findByText("Replies");
+
+    await userEvent.type(screen.getByPlaceholderText("Write a reply…"), "fix the issue");
+    await userEvent.click(screen.getByRole("button", { name: /Polish/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/failed to polish reply/i)).toBeInTheDocument()
+    );
+  });
+
+  it("no polish error shown before a failed attempt", async () => {
+    renderReplies();
+    await screen.findByText("Replies");
+    expect(screen.queryByText(/failed to polish reply/i)).not.toBeInTheDocument();
+  });
+
+  it("textarea content is unchanged when Polish fails", async () => {
+    mockedAxios.post = vi.fn().mockRejectedValue(new Error("AI error"));
+
+    renderReplies();
+    await screen.findByText("Replies");
+
+    const textarea = screen.getByPlaceholderText("Write a reply…") as HTMLTextAreaElement;
+    await userEvent.type(textarea, "fix the issue");
+    await userEvent.click(screen.getByRole("button", { name: /Polish/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/failed to polish reply/i)).toBeInTheDocument()
+    );
+    expect(textarea.value).toBe("fix the issue");
+  });
+});

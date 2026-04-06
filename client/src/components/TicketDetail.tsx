@@ -1,3 +1,4 @@
+import { useState } from "react";
 import axios from "axios";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import {
@@ -17,8 +18,10 @@ import {
   PRIORITY_LABELS,
   STATUS_LABELS,
 } from "@/lib/ticket-badges";
+import { Sparkles } from "lucide-react";
 import { EnumSelect } from "@/components/EnumSelect";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -54,6 +57,17 @@ interface TicketDetailProps {
  */
 function TicketDetail({ ticketId }: TicketDetailProps) {
   const queryClient = useQueryClient();
+  const [summary, setSummary] = useState<string | null>(null);
+
+  const summarizeMutation = useMutation({
+    mutationFn: () =>
+      axios.post<{ summary: string }>(
+        `${API_URL}/api/tickets/${ticketId}/summarize`,
+        {},
+        { withCredentials: true },
+      ),
+    onSuccess: (res) => setSummary(res.data.summary),
+  });
 
   const { data: ticket, isLoading, isError } = useQuery({
     queryKey: ["ticket", ticketId],
@@ -200,10 +214,30 @@ function TicketDetail({ ticketId }: TicketDetailProps) {
 
       {/* Description / message body */}
       <div>
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Description</h3>
+        <div className="flex items-center gap-3 mb-2">
+          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Description</h3>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => summarizeMutation.mutate()}
+            disabled={summarizeMutation.isPending}
+          >
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+            {summarizeMutation.isPending ? "Summarizing…" : "Summarize"}
+          </Button>
+        </div>
         <div className="border rounded-lg p-4 bg-muted/20">
           <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">{ticket.description}</pre>
         </div>
+        {summarizeMutation.isError && (
+          <p className="text-xs text-destructive mt-2">Failed to summarize. Please try again.</p>
+        )}
+        {summary && !summarizeMutation.isPending && (
+          <div className="mt-3 rounded-lg border bg-muted/30 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">AI Summary</p>
+            <p className="text-sm whitespace-pre-wrap">{summary}</p>
+          </div>
+        )}
       </div>
     </div>
   );

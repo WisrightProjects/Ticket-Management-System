@@ -100,7 +100,7 @@ describe("Tickets page — component", () => {
     renderTickets();
     await screen.findByRole("heading", { name: "Tickets" });
 
-    for (const header of ["ID", "Title", "Category", "Priority", "Status", "Project", "Created"]) {
+    for (const header of ["Subject", "Sender", "Status", "Category", "Created"]) {
       expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
     }
   });
@@ -119,49 +119,53 @@ describe("Tickets page — component", () => {
 
   // ─── Ticket data rendering ─────────────────────────────────────────────────
 
-  it("displays the ticket ID and title", async () => {
+  it("displays the ticket title as a link", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
-    expect(await screen.findByText("TKT-0042")).toBeInTheDocument();
-    expect(screen.getByText("Dashboard crashes on login")).toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: "Dashboard crashes on login" });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute("href", "/tickets/TKT-0042");
   });
 
-  it("ticket ID matches TKT-XXXX format", async () => {
+  it("shows sender name in the Sender column", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
-    expect(await screen.findByText(/^TKT-\d{4}$/)).toBeInTheDocument();
+    await screen.findByText("Dashboard crashes on login");
+    const row = screen.getByRole("row", { name: /Dashboard crashes on login/i });
+    expect(within(row).getByText("Admin")).toBeInTheDocument();
   });
 
-  it("shows Category badge with correct label: Support", async () => {
+  it("shows project as subtitle in the Sender column", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
-    await screen.findByText("TKT-0042");
-    const row = screen.getByRole("row", { name: /TKT-0042/i });
+    await screen.findByText("Dashboard crashes on login");
+    const row = screen.getByRole("row", { name: /Dashboard crashes on login/i });
+    expect(within(row).getByText("Email Intake")).toBeInTheDocument();
+  });
+
+  it("shows Category as plain text with correct label: Support", async () => {
+    await resolveWithTickets([TICKET_1]);
+    renderTickets();
+    await screen.findByText("Dashboard crashes on login");
+    const row = screen.getByRole("row", { name: /Dashboard crashes on login/i });
     expect(within(row).getByText("Support")).toBeInTheDocument();
-  });
-
-  it("shows Priority badge with correct label: Medium", async () => {
-    await resolveWithTickets([TICKET_1]);
-    renderTickets();
-    await screen.findByText("TKT-0042");
-    const row = screen.getByRole("row", { name: /TKT-0042/i });
-    expect(within(row).getByText("Medium")).toBeInTheDocument();
   });
 
   it("shows Status badge with correct label: Open", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
-    await screen.findByText("TKT-0042");
-    const row = screen.getByRole("row", { name: /TKT-0042/i });
+    await screen.findByText("Dashboard crashes on login");
+    const row = screen.getByRole("row", { name: /Dashboard crashes on login/i });
     expect(within(row).getByText("Open")).toBeInTheDocument();
   });
 
-  it("shows Project value", async () => {
+  it("does not show the ID or Priority columns", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
-    await screen.findByText("TKT-0042");
-    const row = screen.getByRole("row", { name: /TKT-0042/i });
-    expect(within(row).getByText("Email Intake")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Tickets" });
+
+    expect(screen.queryByRole("columnheader", { name: "ID" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Priority" })).not.toBeInTheDocument();
   });
 
   it("ticket count in subtitle matches the number of rendered rows", async () => {
@@ -177,14 +181,14 @@ describe("Tickets page — component", () => {
   // ─── Ordering ─────────────────────────────────────────────────────────────
 
   it("renders tickets in the order returned by the API (newest first)", async () => {
-    await resolveWithTickets([TICKET_1, TICKET_2]); // TKT-0042 before TKT-0041
+    await resolveWithTickets([TICKET_1, TICKET_2]);
     renderTickets();
-    await screen.findByText("TKT-0042");
+    await screen.findByText("Dashboard crashes on login");
 
     const rows = screen.getAllByRole("row");
     const rowTexts = rows.map((r: HTMLElement) => r.textContent ?? "");
-    const idx1 = rowTexts.findIndex((t: string) => t.includes("TKT-0042"));
-    const idx2 = rowTexts.findIndex((t: string) => t.includes("TKT-0041"));
+    const idx1 = rowTexts.findIndex((t: string) => t.includes("Dashboard crashes on login"));
+    const idx2 = rowTexts.findIndex((t: string) => t.includes("Older login issue"));
     expect(idx1).toBeLessThan(idx2);
   });
 
@@ -209,27 +213,7 @@ describe("Tickets page — component", () => {
   it("shows skeleton rows while loading", () => {
     mockedGet.mockReturnValueOnce(new Promise(() => {})); // never resolves
     renderTickets();
-    // Column headers are visible in the skeleton loading state
-    expect(screen.getByRole("columnheader", { name: "ID" })).toBeInTheDocument();
-  });
-
-  // ─── Assigned-to sub-line ─────────────────────────────────────────────────
-
-  it("shows assigned-to name when ticket is assigned", async () => {
-    const assigned: ApiTicket = {
-      ...TICKET_1,
-      assignedTo: { id: "agent-id", name: "Bob Agent" },
-    };
-    await resolveWithTickets([assigned]);
-    renderTickets();
-    expect(await screen.findByText(/Assigned to Bob Agent/i)).toBeInTheDocument();
-  });
-
-  it("does not show assigned-to line when ticket is unassigned", async () => {
-    await resolveWithTickets([TICKET_1]); // assignedTo: null
-    renderTickets();
-    await screen.findByText("TKT-0042");
-    expect(screen.queryByText(/Assigned to/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Subject" })).toBeInTheDocument();
   });
 });
 
@@ -238,13 +222,12 @@ describe("Tickets page — component", () => {
 describe("Tickets page — sorting", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // All fetches resolve with a single ticket throughout sorting tests
     mockedGet.mockResolvedValue({ data: makePage([TICKET_1]) });
   });
 
   it("initial fetch sends sortBy=createdAt&sortOrder=desc", async () => {
     renderTickets();
-    await screen.findByText("TKT-0042");
+    await screen.findByText("Dashboard crashes on login");
     expect(mockedGet).toHaveBeenCalledWith(
       expect.stringContaining("sortBy=createdAt&sortOrder=desc"),
       expect.any(Object)
@@ -256,25 +239,25 @@ describe("Tickets page — sorting", () => {
     expect(await screen.findByText(/newest first/i)).toBeInTheDocument();
   });
 
-  it("clicking Priority column sends sortBy=priority&sortOrder=asc", async () => {
+  it("clicking Status column sends sortBy=status&sortOrder=asc", async () => {
     renderTickets();
-    await screen.findByText("TKT-0042");
+    await screen.findByText("Dashboard crashes on login");
 
-    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
 
     await waitFor(() => {
       expect(mockedGet).toHaveBeenLastCalledWith(
-        expect.stringContaining("sortBy=priority&sortOrder=asc"),
+        expect.stringContaining("sortBy=status&sortOrder=asc"),
         expect.any(Object)
       );
     });
   });
 
-  it("clicking Priority column twice sends sortOrder=desc", async () => {
+  it("clicking Status column twice sends sortOrder=desc", async () => {
     renderTickets();
-    await screen.findByText("TKT-0042");
+    await screen.findByText("Dashboard crashes on login");
 
-    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
     await waitFor(() =>
       expect(mockedGet).toHaveBeenLastCalledWith(
         expect.stringContaining("sortOrder=asc"),
@@ -282,41 +265,41 @@ describe("Tickets page — sorting", () => {
       )
     );
 
-    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
     await waitFor(() => {
       expect(mockedGet).toHaveBeenLastCalledWith(
-        expect.stringContaining("sortBy=priority&sortOrder=desc"),
+        expect.stringContaining("sortBy=status&sortOrder=desc"),
         expect.any(Object)
       );
     });
   });
 
-  it("subtitle updates to 'sorted by priority (A→Z)' after first click", async () => {
+  it("subtitle updates to 'sorted by status (A→Z)' after clicking Status", async () => {
     renderTickets();
-    await screen.findByText("TKT-0042");
+    await screen.findByText("Dashboard crashes on login");
 
-    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
 
-    expect(await screen.findByText(/sorted by priority.*A→Z/)).toBeInTheDocument();
+    expect(await screen.findByText(/sorted by status.*A→Z/)).toBeInTheDocument();
   });
 
-  it("subtitle updates to 'sorted by priority (Z→A)' after second click", async () => {
+  it("subtitle updates to 'sorted by status (Z→A)' after clicking Status twice", async () => {
     renderTickets();
-    await screen.findByText("TKT-0042");
+    await screen.findByText("Dashboard crashes on login");
 
-    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
     await screen.findByText(/A→Z/);
 
-    await userEvent.click(screen.getByRole("columnheader", { name: "Priority" }));
+    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
 
     expect(await screen.findByText(/Z→A/)).toBeInTheDocument();
   });
 
-  it("Title column header has no cursor-pointer (sorting disabled)", async () => {
+  it("Subject column header has no cursor-pointer (sorting disabled)", async () => {
     renderTickets();
-    await screen.findByText("TKT-0042");
+    await screen.findByText("Dashboard crashes on login");
 
-    expect(screen.getByRole("columnheader", { name: "Title" })).not.toHaveClass("cursor-pointer");
-    expect(screen.getByRole("columnheader", { name: "Priority" })).toHaveClass("cursor-pointer");
+    expect(screen.getByRole("columnheader", { name: "Subject" })).not.toHaveClass("cursor-pointer");
+    expect(screen.getByRole("columnheader", { name: "Status" })).toHaveClass("cursor-pointer");
   });
 });

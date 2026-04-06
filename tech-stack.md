@@ -67,11 +67,23 @@
 - **Safe error logging** — `err.message` only; no SDK internals leaked to logs or responses
 - **MOONSHOT_API_KEY startup guard** — server refuses to start in production if the key is missing
 
+## Job Queue
+
+- **pg-boss** (v12) — PostgreSQL-backed job queue for background workers
+  - `classify-ticket` queue — classifies ticket type and priority via Kimi AI
+  - `auto-resolve-ticket` queue — checks knowledge base and auto-resolves tickets; sets status to PROCESSING during AI call, then RESOLVED (AI reply posted) or OPEN (needs agent)
+  - Singleton instance at `server/src/lib/boss.ts`
+  - Workers registered at startup in `server/src/workers/classify.ts` and `server/src/workers/auto-resolve.ts`
+
 ## AI / External APIs
 
 - **Kimi (Moonshot AI)** — `moonshot-v1-8k` model via OpenAI-compatible API (`https://api.moonshot.ai/v1`)
 - **Vercel AI SDK** (`ai` + `@ai-sdk/openai-compatible`) — used for structured LLM calls from the server
-- Used for: AI-powered reply polishing on POST /api/tickets/:id/polish
+- Used for:
+  - AI-powered reply polishing (`POST /api/tickets/:id/polish`)
+  - Ticket summarization (`POST /api/tickets/:id/summarize`)
+  - Auto-classification of ticket type + priority (pg-boss worker)
+  - Auto-resolution using knowledge base (`server/knowledge-base.md`) — replies and resolves, or hands off to agents
 
 ## Testing
 
@@ -91,7 +103,7 @@
 - Global setup: migrations + admin seed before each run
 - Global teardown: all tables truncated after tests complete
 - 158 tests across authentication (46), user management (5), webhooks (28), tickets (21), ticket detail (52), smoke (1)
-- Backend on port 5001, Frontend on port 5175
+- Backend on port 5001, Frontend on port 5174
 - `TEST_BACKEND_URL` in `server/.env` must point to the test backend port (5001) for UI tests to resolve correctly
 
 ### Git Hooks

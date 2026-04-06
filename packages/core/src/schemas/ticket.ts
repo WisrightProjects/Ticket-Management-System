@@ -6,7 +6,7 @@ import { z } from "zod";
 
 export const TICKET_TYPES = ["BUG", "REQUIREMENT", "TASK", "SUPPORT"] as const;
 export const PRIORITIES   = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
-export const STATUSES     = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"] as const;
+export const STATUSES     = ["NEW", "OPEN", "IN_PROGRESS", "PROCESSING", "RESOLVED", "CLOSED"] as const;
 
 export type TicketTypeValue = (typeof TICKET_TYPES)[number];
 export type PriorityValue   = (typeof PRIORITIES)[number];
@@ -28,8 +28,10 @@ export const PRIORITY = {
 } as const satisfies Record<string, PriorityValue>;
 
 export const STATUS = {
+  NEW:         "NEW",
   OPEN:        "OPEN",
   IN_PROGRESS: "IN_PROGRESS",
+  PROCESSING:  "PROCESSING",
   RESOLVED:    "RESOLVED",
   CLOSED:      "CLOSED",
 } as const satisfies Record<string, StatusValue>;
@@ -118,6 +120,7 @@ export const inboundEmailSchema = z.object({
   name:    z.string().optional(),
   subject: z.string().min(1, "Subject is required").max(255, "Subject must be 255 characters or fewer"),
   body:    z.string().min(1, "Body is required").max(10000, "Body must be 10000 characters or fewer"),
+  project: z.string().min(1).max(100).optional(),
 });
 
 export type InboundEmail = z.infer<typeof inboundEmailSchema>;

@@ -20,9 +20,7 @@ import {
   type StatusValue,
 } from "@tms/core";
 import {
-  priorityVariant,
   statusVariant,
-  typeVariant,
   CATEGORY_LABELS,
   PRIORITY_LABELS,
   STATUS_LABELS,
@@ -65,46 +63,33 @@ function SortIcon({ direction }: { direction: "asc" | "desc" | false }) {
 const col = createColumnHelper<ApiTicket>();
 
 const columns = [
-  col.accessor("ticketId", {
-    header: "ID",
-    cell: (info) => (
-      <span className="font-mono text-sm font-medium">{info.getValue()}</span>
-    ),
-  }),
   col.accessor("title", {
-    header: "Title",
+    header: "Subject",
+    enableSorting: false,
+    cell: (info) => {
+      const row = info.row.original;
+      return (
+        <Link
+          to={`/tickets/${row.ticketId}`}
+          className="font-medium hover:underline"
+        >
+          {info.getValue()}
+        </Link>
+      );
+    },
+  }),
+  col.accessor("createdBy", {
+    id: "createdBy",
+    header: "Sender",
     enableSorting: false,
     cell: (info) => {
       const row = info.row.original;
       return (
         <div>
-          <Link
-            to={`/tickets/${row.ticketId}`}
-            className="font-medium hover:underline"
-          >
-            {info.getValue()}
-          </Link>
-          {row.assignedTo && (
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Assigned to {row.assignedTo.name}
-            </div>
-          )}
+          <p className="text-sm font-medium">{info.getValue().name}</p>
+          <p className="text-xs text-muted-foreground">{row.project}</p>
         </div>
       );
-    },
-  }),
-  col.accessor("type", {
-    header: "Category",
-    cell: (info) => {
-      const v = info.getValue();
-      return <Badge variant={typeVariant(v)}>{CATEGORY_LABELS[v]}</Badge>;
-    },
-  }),
-  col.accessor("priority", {
-    header: "Priority",
-    cell: (info) => {
-      const v = info.getValue();
-      return <Badge variant={priorityVariant(v)}>{PRIORITY_LABELS[v]}</Badge>;
     },
   }),
   col.accessor("status", {
@@ -114,9 +99,11 @@ const columns = [
       return <Badge variant={statusVariant(v)}>{STATUS_LABELS[v]}</Badge>;
     },
   }),
-  col.accessor("project", {
-    header: "Project",
-    cell: (info) => <span className="text-sm">{info.getValue()}</span>,
+  col.accessor("type", {
+    header: "Category",
+    cell: (info) => (
+      <span className="text-sm text-muted-foreground">{CATEGORY_LABELS[info.getValue()]}</span>
+    ),
   }),
   col.accessor("createdAt", {
     header: "Created",
@@ -130,20 +117,12 @@ const columns = [
 
 // ─── Subtitle helper ──────────────────────────────────────────────────────────
 
-const COLUMN_LABELS: Record<string, string> = {
-  ticketId:  "ticket ID",
-  type:      "category",
-  priority:  "priority",
-  status:    "status",
-  project:   "project",
-  createdAt: "date",
-};
-
 function sortSubtitle(sorting: SortingState): string {
   if (sorting.length === 0) return "newest first";
   const { id, desc } = sorting[0];
   if (id === "createdAt") return desc ? "newest first" : "oldest first";
-  const label = COLUMN_LABELS[id] ?? id;
+  const labels: Record<string, string> = { status: "status", type: "category" };
+  const label = labels[id] ?? id;
   return `sorted by ${label} (${desc ? "Z→A" : "A→Z"})`;
 }
 
@@ -152,7 +131,7 @@ function sortSubtitle(sorting: SortingState): string {
 function Tickets() {
   "use no memo"; // TanStack Table v8 returns functions that React Compiler can't safely memoize
 
-  const [sorting, setSorting]     = useState<SortingState>([{ id: "createdAt", desc: true }]);
+  const [sorting, setSorting]       = useState<SortingState>([{ id: "createdAt", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
 
   // Filter state
@@ -189,15 +168,15 @@ function Tickets() {
       const sortCol = sorting[0]?.id ?? "createdAt";
       const sortDir = sorting[0]?.desc !== false ? "desc" : "asc";
       const params  = new URLSearchParams({
-        sortBy:   sortCol,
+        sortBy:    sortCol,
         sortOrder: sortDir,
-        page:     String(pagination.pageIndex + 1),
-        pageSize: String(pagination.pageSize),
+        page:      String(pagination.pageIndex + 1),
+        pageSize:  String(pagination.pageSize),
       });
       if (search)         params.set("search",   search);
       if (statusFilter)   params.set("status",   statusFilter);
       if (priorityFilter) params.set("priority", priorityFilter);
-      if (typeFilter)     params.set("type",      typeFilter);
+      if (typeFilter)     params.set("type",     typeFilter);
       const res = await axios.get(
         `${API_URL}/api/tickets?${params.toString()}`,
         { withCredentials: true }
@@ -230,7 +209,7 @@ function Tickets() {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <main className="max-w-7xl mx-auto px-4 py-8">
+        <main className="max-w-5xl mx-auto px-4 py-8">
           <div className="mb-6">
             <Skeleton className="h-7 w-40 mb-1" />
             <Skeleton className="h-4 w-56" />
@@ -239,7 +218,7 @@ function Tickets() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {["ID", "Title", "Category", "Priority", "Status", "Project", "Created"].map((h) => (
+                  {["Subject", "Sender", "Status", "Category", "Created"].map((h) => (
                     <TableHead key={h}>{h}</TableHead>
                   ))}
                 </TableRow>
@@ -247,10 +226,8 @@ function Tickets() {
               <TableBody>
                 {Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((__, j) => (
-                      <TableCell key={j}>
-                        <Skeleton className="h-4 w-full" />
-                      </TableCell>
+                    {Array.from({ length: 5 }).map((__, j) => (
+                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))}
@@ -266,7 +243,7 @@ function Tickets() {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <main className="max-w-7xl mx-auto px-4 py-8">
+        <main className="max-w-5xl mx-auto px-4 py-8">
           <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-md">
             Failed to load tickets. Please refresh the page.
           </div>
@@ -278,28 +255,26 @@ function Tickets() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-bold">Tickets</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {total} {total === 1 ? "ticket" : "tickets"} — {sortSubtitle(sorting)}
-              {hasFilters && " (filtered)"}
-            </p>
-          </div>
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold">Tickets</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {total} {total === 1 ? "ticket" : "tickets"} — {sortSubtitle(sorting)}
+            {hasFilters && " (filtered)"}
+          </p>
         </div>
 
         {/* Filter bar */}
         <div className="flex flex-wrap gap-2 mb-4">
           <Input
-            placeholder="Search by title…"
+            placeholder="Search tickets…"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="h-9 w-56"
           />
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter((v as string) === "all" ? "" : v as StatusValue)}>
             <SelectTrigger className="h-9 w-36">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
@@ -308,25 +283,25 @@ function Tickets() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter((v as string) === "all" ? "" : v as PriorityValue)}>
-            <SelectTrigger className="h-9 w-36">
-              <SelectValue placeholder="Priority" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All priorities</SelectItem>
-              {PRIORITIES.map((p) => (
-                <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={typeFilter} onValueChange={(v) => setTypeFilter((v as string) === "all" ? "" : v as TicketTypeValue)}>
-            <SelectTrigger className="h-9 w-36">
-              <SelectValue placeholder="Category" />
+            <SelectTrigger className="h-9 w-40">
+              <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All categories</SelectItem>
               {TICKET_TYPES.map((t) => (
                 <SelectItem key={t} value={t}>{CATEGORY_LABELS[t]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={(v) => setPriorityFilter((v as string) === "all" ? "" : v as PriorityValue)}>
+            <SelectTrigger className="h-9 w-36">
+              <SelectValue placeholder="All priorities" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All priorities</SelectItem>
+              {PRIORITIES.map((p) => (
+                <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -372,7 +347,7 @@ function Tickets() {
                 </TableRow>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
+                  <TableRow key={row.id} className="hover:bg-muted/40">
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

@@ -2,6 +2,9 @@ import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { inboundEmailSchema, TICKET_TYPE, PRIORITY, STATUS, ROLES } from "@tms/core";
 import prisma from "../lib/prisma.js";
+import boss from "../lib/boss.js";
+import { CLASSIFY_QUEUE, type ClassifyJobData } from "../workers/classify.js";
+import { AUTO_RESOLVE_QUEUE, type AutoResolveJobData } from "../workers/auto-resolve.js";
 
 const router = Router();
 
@@ -14,7 +17,7 @@ router.post("/email", async (req, res) => {
     return;
   }
 
-  const { from, name, subject, body } = result.data;
+  const { from, name, subject, body, project } = result.data;
 
   // Find a system admin to set as ticket creator
   const admin = await prisma.user.findFirst({ where: { role: ROLES.ADMIN } });
@@ -49,8 +52,8 @@ router.post("/email", async (req, res) => {
         description,
         type:        TICKET_TYPE.SUPPORT,
         priority:    PRIORITY.MEDIUM,
-        status:      STATUS.OPEN,
-        project:     "Email Intake",
+        status:      STATUS.NEW,
+        project:     project ?? "Email Intake",
         createdById: admin.id,
       },
       select: { id: true, ticketId: true },
@@ -58,6 +61,15 @@ router.post("/email", async (req, res) => {
   });
 
   res.status(201).json({ ticketId: ticket.ticketId, id: ticket.id });
+
+  // Enqueue background jobs — durable, retried automatically by pg-boss
+  boss.send(CLASSIFY_QUEUE, { ticketDbId: ticket.id, subject, body } satisfies ClassifyJobData)
+    .then((id) => console.log(`[boss] Enqueued classify job ${id} for ticket ${ticket.ticketId}`))
+    .catch((err) => console.error("[boss] Failed to enqueue classify job:", err instanceof Error ? err.message : String(err)));
+
+  boss.send(AUTO_RESOLVE_QUEUE, { ticketDbId: ticket.id, ticketId: ticket.ticketId, subject, body, adminId: admin.id, customerName: name ?? from } satisfies AutoResolveJobData)
+    .then((id) => console.log(`[boss] Enqueued auto-resolve job ${id} for ticket ${ticket.ticketId}`))
+    .catch((err) => console.error("[boss] Failed to enqueue auto-resolve job:", err instanceof Error ? err.message : String(err)));
 });
 
 export default router;

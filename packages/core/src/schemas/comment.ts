@@ -24,3 +24,8 @@ export const polishReplySchema = z.object({
   content: z.string().min(1, "Content is required").max(5000),
 });
 export type PolishReplyInput = z.infer<typeof polishReplySchema>;
+
+export const summarizeResponseSchema = z.object({
+  summary: z.string(),
+});
+export type SummarizeResponse = z.infer<typeof summarizeResponseSchema>;

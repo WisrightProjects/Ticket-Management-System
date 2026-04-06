@@ -39,13 +39,13 @@ packages/core/
 |:-------|:-----|:------------|
 | `TICKET_TYPES` | `const` tuple | `["BUG","REQUIREMENT","TASK","SUPPORT"]` |
 | `PRIORITIES` | `const` tuple | `["LOW","MEDIUM","HIGH","CRITICAL"]` |
-| `STATUSES` | `const` tuple | `["OPEN","IN_PROGRESS","RESOLVED","CLOSED"]` |
+| `STATUSES` | `const` tuple | `["NEW","OPEN","IN_PROGRESS","PROCESSING","RESOLVED","CLOSED"]` |
 | `TICKET_TYPE` | `const` object | Named constants — use instead of string literals |
 | `PRIORITY` | `const` object | Named constants — use instead of string literals |
 | `STATUS` | `const` object | Named constants — use instead of string literals |
 | `TicketTypeValue` | `type` | `"BUG" \| "REQUIREMENT" \| "TASK" \| "SUPPORT"` |
 | `PriorityValue` | `type` | `"LOW" \| "MEDIUM" \| "HIGH" \| "CRITICAL"` |
-| `StatusValue` | `type` | `"OPEN" \| "IN_PROGRESS" \| "RESOLVED" \| "CLOSED"` |
+| `StatusValue` | `type` | `"NEW" \| "OPEN" \| "IN_PROGRESS" \| "PROCESSING" \| "RESOLVED" \| "CLOSED"` |
 | `apiTicketSchema` | Zod schema | Validates ticket objects from `GET /api/tickets` and `GET /api/tickets/:id` |
 | `apiTicketsSchema` | Zod schema | Array of `apiTicketSchema` |
 | `ApiTicket` | `type` | Inferred from `apiTicketSchema` |

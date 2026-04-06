@@ -147,7 +147,6 @@ Build a **centralized Ticket Management System** that captures, tracks, assigns,
 ## 7. Out of Scope (Phase 1)
 
 - Native mobile apps (iOS/Android) — planned for Phase 2
-- AI-powered ticket classification and auto-routing
 - Multi-language / localization support
 - Time tracking and billing within tickets
 - Public knowledge base
