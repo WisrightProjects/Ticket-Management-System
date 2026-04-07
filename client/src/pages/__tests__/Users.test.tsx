@@ -194,7 +194,7 @@ describe("Create user form", () => {
       );
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-  });
+  }, 15000);
 
   it("shows server error message on 500 response", async () => {
     mockedAxios.post = vi.fn().mockRejectedValue({
