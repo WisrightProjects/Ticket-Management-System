@@ -410,7 +410,7 @@ test.describe("Navbar displays authenticated user info", () => {
   test("admin's name is displayed in the navbar", async ({ page }) => {
     await loginAsAdmin(page);
     // The seed creates the admin with name "Admin"
-    await expect(page.getByText("Admin", { exact: true })).toBeVisible();
+    await expect(page.getByRole("banner").getByText("Admin", { exact: true })).toBeVisible();
   });
 });
 

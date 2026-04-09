@@ -27,11 +27,11 @@ async function loginAsAdmin(page: Page) {
 }
 
 // ---------------------------------------------------------------------------
-// Feature 1: reCAPTCHA on portal submit forms
+// Feature 1: Custom CAPTCHA on portal submit forms
 // ---------------------------------------------------------------------------
 
-test.describe("reCAPTCHA on portal submit forms", () => {
-  test("PortalSubmit page renders reCAPTCHA widget", async ({ page }) => {
+test.describe("Custom CAPTCHA on portal submit forms", () => {
+  test("PortalSubmit page renders custom CAPTCHA widget", async ({ page }) => {
     // Mock the portal info endpoint so the page loads without a real backend slug
     await page.route(/\/api\/portal\/test-slug$/, (route) =>
       route.fulfill({
@@ -47,16 +47,23 @@ test.describe("reCAPTCHA on portal submit forms", () => {
         body:        JSON.stringify([]),
       })
     );
+    await page.route(/\/api\/portal\/captcha/, (route) =>
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body:        JSON.stringify({ code: "ABCDE", token: "test-token" }),
+      })
+    );
 
     await page.goto("/portal/test-slug");
 
-    // reCAPTCHA iframe should be present on the page
-    await expect(page.frameLocator('iframe[title*="reCAPTCHA"]').first()).toBeDefined();
-    // The reCAPTCHA container div should exist in the DOM
-    await expect(page.locator(".g-recaptcha, [data-sitekey]").or(page.locator('iframe[src*="recaptcha"]'))).toBeAttached({ timeout: 10_000 });
+    // The custom CAPTCHA canvas should be present
+    await expect(page.locator("canvas")).toBeAttached({ timeout: 10_000 });
+    // The instruction text should be visible
+    await expect(page.getByText("Type the characters shown below")).toBeVisible();
   });
 
-  test("SubmitTicketModal renders reCAPTCHA and submit is disabled without it", async ({ page }) => {
+  test("SubmitTicketModal renders custom CAPTCHA and submit is disabled without it", async ({ page }) => {
     // Login as a customer via API mock
     await page.route(/\/api\/auth\/get-session/, (route) =>
       route.fulfill({
@@ -82,21 +89,26 @@ test.describe("reCAPTCHA on portal submit forms", () => {
         body:        JSON.stringify([{ id: "p1", projectCode: "P1", projectName: "Project One" }]),
       })
     );
+    await page.route(/\/api\/portal\/captcha/, (route) =>
+      route.fulfill({
+        status:      200,
+        contentType: "application/json",
+        body:        JSON.stringify({ code: "ABCDE", token: "test-token" }),
+      })
+    );
 
     await page.goto("/portal/tickets");
 
     // Open the Submit a Ticket modal
     await page.getByRole("button", { name: /Submit a Ticket/i }).first().click();
 
-    // The submit button should be present
+    // The submit button should be present and disabled without completing CAPTCHA
     const submitBtn = page.getByRole("button", { name: /Submit Ticket/i });
     await expect(submitBtn).toBeVisible();
-
-    // Without completing reCAPTCHA, the submit button must be disabled
     await expect(submitBtn).toBeDisabled();
 
-    // reCAPTCHA iframe should appear
-    await expect(page.locator('iframe[src*="recaptcha"]').first()).toBeAttached({ timeout: 10_000 });
+    // The custom CAPTCHA canvas should appear in the modal
+    await expect(page.locator("canvas")).toBeAttached({ timeout: 10_000 });
   });
 });
 
@@ -308,7 +320,24 @@ test.describe("Analytics page", () => {
       date:  new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10),
       count: Math.floor(Math.random() * 5) + 1,
     })),
-    avgResolutionHours:  24.5,
+    avgResolutionHours:      24.5,
+    avgRating:               4.2,
+    ratedCount:              10,
+    ratingDistribution:      [
+      { stars: 5, count: 6 },
+      { stars: 4, count: 3 },
+      { stars: 3, count: 1 },
+    ],
+    byClient:                [
+      { clientId: "c1", clientName: "Acme Corp", count: 20 },
+      { clientId: "c2", clientName: "Beta Inc",  count: 22 },
+    ],
+    avgResolutionByPriority: [
+      { priority: "LOW",      avgHours: 10 },
+      { priority: "MEDIUM",   avgHours: 20 },
+      { priority: "HIGH",     avgHours: 30 },
+      { priority: "CRITICAL", avgHours: 5  },
+    ],
   };
 
   test("Analytics page is accessible from sidebar for admin", async ({ page }) => {

@@ -172,7 +172,7 @@ test.describe("GET /api/tickets — API", () => {
   test("status values conform to StatusValue", async ({ request }) => {
     await apiSignIn(request);
     const tickets = await getTickets(request);
-    const valid: StatusValue[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
+    const valid: StatusValue[] = [...STATUSES];
     for (const t of tickets) {
       expect(valid).toContain(t.status);
     }

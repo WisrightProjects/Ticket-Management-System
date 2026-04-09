@@ -369,12 +369,12 @@ test.describe("PATCH /api/tickets/:id/status — API", () => {
   test("updates status and returns 200 with updated ticket", async ({ request }) => {
     await apiSignIn(request);
     const res = await request.patch(`${BASE}/api/tickets/${ticketId}/status`, {
-      data:    { status: "IN_PROGRESS" },
+      data:    { status: "OPEN_IN_PROGRESS" },
       headers: { "Content-Type": "application/json" },
     });
     expect(res.status()).toBe(200);
     const ticket = await res.json();
-    expect(ticket.status).toBe("IN_PROGRESS");
+    expect(ticket.status).toBe("OPEN_IN_PROGRESS");
   });
 
   test("returns 400 for an invalid status value", async ({ request }) => {

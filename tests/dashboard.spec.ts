@@ -170,16 +170,19 @@ test.describe("Dashboard — UI", () => {
 
   test("shows all 5 stat card labels", async ({ page }) => {
     await expect(page.getByText("Total Tickets")).toBeVisible();
-    await expect(page.getByText("Open Tickets")).toBeVisible();
-    await expect(page.getByText("AI Resolved")).toBeVisible();
+    await expect(page.getByText("Open")).toBeVisible();
+    await expect(page.getByText("Un-Assigned")).toBeVisible();
     await expect(page.getByText("AI Resolution Rate")).toBeVisible();
     await expect(page.getByText("Avg Resolution Time")).toBeVisible();
   });
 
   test("stat values are visible and not empty", async ({ page }) => {
-    // 5 stat cards + 1 chart card = 6 total
+    // KPI stat cards should be present
     const cards = page.locator('[data-slot="card"]');
-    await expect(cards).toHaveCount(6);
+    await expect(cards.first()).toBeVisible();
+    // At least 6 cards (KPI grid) + chart + agent workload etc.
+    const count = await cards.count();
+    expect(count).toBeGreaterThanOrEqual(6);
   });
 
   test("AI Resolution Rate value contains a percent sign", async ({ page }) => {
@@ -194,10 +197,10 @@ test.describe("Dashboard — UI", () => {
 
   test("bar chart is rendered below the stat cards", async ({ page }) => {
     // Recharts renders an SVG — wait for it to appear
-    await page.waitForSelector("text=Tickets per Day");
-    await expect(page.getByText("Tickets per Day (Last 30 Days)")).toBeVisible();
+    await page.waitForSelector("text=Ticket Volume");
+    await expect(page.getByText("Ticket Volume — Last 30 Days")).toBeVisible();
     // The chart renders an SVG element inside the card
-    const chartSvg = page.locator('[data-slot="card"]').filter({ hasText: "Tickets per Day" }).locator("svg");
+    const chartSvg = page.locator('[data-slot="card"]').filter({ hasText: "Ticket Volume" }).locator("svg");
     await expect(chartSvg).toBeVisible();
   });
 

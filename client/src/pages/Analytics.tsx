@@ -222,14 +222,14 @@ export default function Analytics() {
     count: d.count,
   }));
 
-  const ratingDistData = data.ratingDistribution.map((r) => ({
+  const ratingDistData = (data.ratingDistribution ?? []).map((r) => ({
     stars: `${r.stars}★`,
     count: r.count,
   }));
 
   const priorityOrder = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
   const resolutionData = priorityOrder
-    .map((p) => data.avgResolutionByPriority.find((r) => r.priority === p))
+    .map((p) => (data.avgResolutionByPriority ?? []).find((r) => r.priority === p))
     .filter(Boolean)
     .map((r) => ({
       name:     r!.priority.charAt(0) + r!.priority.slice(1).toLowerCase(),
