@@ -229,9 +229,12 @@ describe("TicketReplies — form interaction", () => {
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
         expect.stringContaining("/api/tickets/TKT-0001/comments"),
-        { content: "My reply" },
+        expect.any(FormData),
         expect.any(Object)
       );
+      // Verify the FormData contains the expected content
+      const [, formData] = mockedAxios.post.mock.calls[0];
+      expect((formData as FormData).get("content")).toBe("My reply");
     });
   });
 

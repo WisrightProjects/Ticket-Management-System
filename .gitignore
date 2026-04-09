@@ -49,3 +49,12 @@ skills-lock.json
 
 # npm lockfile (project uses Bun)
 package-lock.json
+
+# Server runtime artifacts
+server/bun
+server/server_out.txt
+server/diag_tmp.ts
+server/*.log
+
+# Uploaded files (local disk storage)
+uploads/

@@ -76,12 +76,15 @@ function makePage(tickets: ApiTicket[]) {
 }
 
 async function resolveWithTickets(tickets: ApiTicket[]) {
-  // The component now fires two concurrent queries:
-  //   1. /api/tickets/assignable-users  (assignee dropdown)
-  //   2. /api/tickets?...               (ticket list)
-  // mockResolvedValue (persistent) covers both calls in any order.
+  // The component fires concurrent queries:
+  //   1. /api/tickets/assignable-users  (assignee filter dropdown)
+  //   2. /api/tickets/clients           (client filter dropdown)
+  //   3. /api/tickets?...               (ticket list)
   mockedGet.mockImplementation((url: string) => {
     if (typeof url === "string" && url.includes("assignable-users")) {
+      return Promise.resolve({ data: [] });
+    }
+    if (typeof url === "string" && url.includes("clients")) {
       return Promise.resolve({ data: [] });
     }
     return Promise.resolve({ data: makePage(tickets) });
@@ -217,6 +220,9 @@ describe("Tickets page — component", () => {
       if (typeof url === "string" && url.includes("assignable-users")) {
         return Promise.resolve({ data: [] });
       }
+      if (typeof url === "string" && url.includes("clients")) {
+        return Promise.resolve({ data: [] });
+      }
       return Promise.reject(new Error("Network error"));
     });
     renderTickets();
@@ -228,6 +234,9 @@ describe("Tickets page — component", () => {
   it("shows skeleton rows while loading", () => {
     mockedGet.mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("assignable-users")) {
+        return Promise.resolve({ data: [] });
+      }
+      if (typeof url === "string" && url.includes("clients")) {
         return Promise.resolve({ data: [] });
       }
       return new Promise(() => {}); // never resolves — keeps the tickets query loading
@@ -244,6 +253,9 @@ describe("Tickets page — sorting", () => {
     vi.clearAllMocks();
     mockedGet.mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("assignable-users")) {
+        return Promise.resolve({ data: [] });
+      }
+      if (typeof url === "string" && url.includes("clients")) {
         return Promise.resolve({ data: [] });
       }
       return Promise.resolve({ data: makePage([TICKET_1]) });
