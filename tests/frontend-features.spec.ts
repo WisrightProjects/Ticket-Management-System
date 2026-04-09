@@ -57,10 +57,9 @@ test.describe("Custom CAPTCHA on portal submit forms", () => {
 
     await page.goto("/portal/test-slug");
 
-    // Wait for the CAPTCHA input to appear (confirms form + SimpleCaptcha are mounted)
-    await page.waitForSelector('input[placeholder="Enter code"]', { timeout: 15_000 });
-    // The CAPTCHA input and canvas should both be visible
-    await expect(page.locator('input[placeholder="Enter code"]')).toBeVisible();
+    // Wait for the form to load and the CAPTCHA widget to be rendered
+    // SimpleCaptcha renders a canvas and an input for the code
+    await expect(page.locator('input[placeholder="Enter code"]')).toBeVisible({ timeout: 15_000 });
     await expect(page.locator("canvas").first()).toBeAttached();
   });
 
