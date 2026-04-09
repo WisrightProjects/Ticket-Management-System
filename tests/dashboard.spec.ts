@@ -191,8 +191,8 @@ test.describe("Dashboard — UI", () => {
     // The value cell is the <p> inside the card following "AI Resolution Rate"
     const rateCard = page.locator('[data-slot="card"]').filter({ hasText: "AI Resolution Rate" });
     await expect(rateCard).toBeVisible();
-    // The value should contain a "%"
-    await expect(rateCard.locator("p").last()).toContainText("%");
+    // The second <p> is the value (e.g. "0%"), the last <p> is the subtitle
+    await expect(rateCard.locator("p").nth(1)).toContainText("%");
   });
 
   test("bar chart is rendered below the stat cards", async ({ page }) => {

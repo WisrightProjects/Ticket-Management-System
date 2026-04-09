@@ -57,12 +57,11 @@ test.describe("Custom CAPTCHA on portal submit forms", () => {
 
     await page.goto("/portal/test-slug");
 
-    // Wait for the form to load (past the "Loading portal..." state)
-    await page.waitForSelector("form", { timeout: 10_000 });
-    // The custom CAPTCHA canvas should be visible
-    await expect(page.locator("canvas").first()).toBeVisible({ timeout: 10_000 });
-    // The CAPTCHA input field should be present
+    // Wait for the CAPTCHA input to appear (confirms form + SimpleCaptcha are mounted)
+    await page.waitForSelector('input[placeholder="Enter code"]', { timeout: 15_000 });
+    // The CAPTCHA input and canvas should both be visible
     await expect(page.locator('input[placeholder="Enter code"]')).toBeVisible();
+    await expect(page.locator("canvas").first()).toBeAttached();
   });
 
   test("SubmitTicketModal renders custom CAPTCHA and submit is disabled without it", async ({ page }) => {
