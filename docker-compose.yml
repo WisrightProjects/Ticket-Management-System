@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB:       ticket_management
       POSTGRES_USER:     tms_user
-      POSTGRES_PASSWORD: tms_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tms_password}
     volumes:
       - db_data:/var/lib/postgresql/data
     networks:
@@ -32,12 +32,19 @@ services:
     environment:
       NODE_ENV:           production
       PORT:               4000
-      DATABASE_URL:       postgresql://tms_user:tms_password@db:5432/ticket_management
+      DATABASE_URL:       postgresql://tms_user:${POSTGRES_PASSWORD:-tms_password}@db:5432/ticket_management
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL:    ${BETTER_AUTH_URL}
       CLIENT_URL:         ${CLIENT_URL}
       CAPTCHA_SECRET:     ${CAPTCHA_SECRET}
       WEBHOOK_SECRET:     ${WEBHOOK_SECRET}
+      # First-deploy admin seed
+      ADMIN_EMAIL:        ${ADMIN_EMAIL}
+      ADMIN_PASSWORD:     ${ADMIN_PASSWORD}
+      # HRMS integration
+      HRMS_API_URL:       ${HRMS_API_URL:-}
+      HRMS_API_EMAIL:     ${HRMS_API_EMAIL:-}
+      HRMS_API_PASSWORD:  ${HRMS_API_PASSWORD:-}
       # Optional — leave blank to disable
       MOONSHOT_API_KEY:       ${MOONSHOT_API_KEY:-}
       SENTRY_DSN:             ${SENTRY_DSN:-}

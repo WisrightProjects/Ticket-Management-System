@@ -43,6 +43,10 @@ COPY server        ./server
 # Uploads directory (will be mounted as a volume in production)
 RUN mkdir -p /app/server/uploads
 
+# Startup script: runs migrations + seed + server
+COPY server/start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 EXPOSE 4000
 
-CMD ["bun", "run", "/app/server/src/index.ts"]
+CMD ["/app/start.sh"]
