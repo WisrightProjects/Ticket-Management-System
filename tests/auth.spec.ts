@@ -41,7 +41,7 @@ test.describe("Login page rendering", () => {
     page,
   }) => {
     await expect(
-      page.getByText("Ticket Management System")
+      page.getByText("Right Tracker")
     ).toBeVisible();
     await expect(page.getByLabel("Email")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();

@@ -40,7 +40,7 @@ test.describe("Custom CAPTCHA on portal submit forms", () => {
       route.fulfill({
         status:      200,
         contentType: "application/json",
-        body:        JSON.stringify({ customerName: "Test Co", slug: "test-slug" }),
+        body:        JSON.stringify({ customerName: "Test Slug", slug: "test-slug" }),
       })
     );
     await page.route(/\/api\/portal\/test-slug\/projects/, (route) =>
@@ -58,11 +58,12 @@ test.describe("Custom CAPTCHA on portal submit forms", () => {
       })
     );
 
-    await page.goto("/portal/test-slug");
+    // Submit form lives at /portal/:slug/submit
+    await page.goto("/portal/test-slug/submit");
 
-    // Wait for the CAPTCHA widget — SimpleCaptcha renders an input for the code
+    // Wait for the CAPTCHA widget — SimpleCaptcha renders an img + text input
     await expect(page.locator('input[placeholder="Enter code"]')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator("canvas").first()).toBeAttached();
+    await expect(page.locator('img[alt="CAPTCHA"]')).toBeAttached();
   });
 
   test("SubmitTicketModal renders custom CAPTCHA and submit is disabled without it", async ({ page }) => {
@@ -109,8 +110,8 @@ test.describe("Custom CAPTCHA on portal submit forms", () => {
     await expect(submitBtn).toBeVisible();
     await expect(submitBtn).toBeDisabled();
 
-    // The custom CAPTCHA canvas should appear in the modal
-    await expect(page.locator("canvas")).toBeAttached({ timeout: 10_000 });
+    // The custom CAPTCHA image should appear in the modal
+    await expect(page.locator('img[alt="CAPTCHA"]')).toBeAttached({ timeout: 10_000 });
   });
 });
 
