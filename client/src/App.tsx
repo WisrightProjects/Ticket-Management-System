@@ -6,6 +6,8 @@ import Dashboard from "@/pages/Dashboard";
 import Tickets from "@/pages/Tickets";
 import TicketDetailPage from "@/pages/TicketDetailPage";
 import Users from "@/pages/Users";
+import AgentDetail from "@/pages/AgentDetail";
+import Clients from "@/pages/Clients";
 import AppLayout from "@/components/AppLayout";
 import Analytics from "@/pages/Analytics";
 import Portal404 from "@/pages/portal/Portal404";
@@ -66,6 +68,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession();
+  const role = (session?.user as unknown as { role?: string })?.role;
 
   if (isPending) {
     return (
@@ -76,6 +79,10 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (session) {
+    // Customer session on admin login page — go to portal instead
+    if (role === "CUSTOMER") {
+      return <Navigate to="/portal/dashboard" replace />;
+    }
     return <Navigate to="/" replace />;
   }
 
@@ -121,7 +128,8 @@ function App() {
         <Route path="/portal/forgot-password" element={<PortalForgotPassword />} />
         <Route path="/portal/reset-password" element={<PortalResetPassword />} />
         <Route path="/portal/:slug/login" element={<PortalLogin />} />
-        <Route path="/portal/:slug" element={<PortalSubmit />} />
+        <Route path="/portal/:slug/submit" element={<PortalSubmit />} />
+        <Route path="/portal/:slug" element={<Navigate to="login" replace />} />
         <Route element={<CustomerRoute />}>
           <Route element={<PortalLayout />}>
             <Route path="/portal/dashboard" element={<PortalDashboard />} />
@@ -142,6 +150,8 @@ function App() {
           <Route path="/tickets"     element={<Tickets />} />
           <Route path="/tickets/:id" element={<TicketDetailPage />} />
           <Route path="/users"       element={<AdminRoute><Users /></AdminRoute>} />
+          <Route path="/users/:id"   element={<AdminRoute><AgentDetail /></AdminRoute>} />
+          <Route path="/clients"     element={<AdminRoute><Clients /></AdminRoute>} />
           <Route path="/analytics"   element={<AdminRoute><Analytics /></AdminRoute>} />
         </Route>
       </Routes>

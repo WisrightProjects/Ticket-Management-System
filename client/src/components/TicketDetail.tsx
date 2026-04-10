@@ -7,8 +7,10 @@ import {
   type AssignableUser,
   STATUSES,
   TICKET_TYPES,
+  PRIORITIES,
   type StatusValue,
   type TicketTypeValue,
+  type PriorityValue,
 } from "@tms/core";
 import {
   priorityVariant,
@@ -119,6 +121,14 @@ function TicketDetail({ ticketId }: TicketDetailProps) {
     },
   });
 
+  const priorityMutation = useMutation({
+    mutationFn: (priority: PriorityValue) =>
+      axios.patch(`${API_URL}/api/tickets/${ticketId}/priority`, { priority }, { withCredentials: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -182,6 +192,17 @@ function TicketDetail({ ticketId }: TicketDetailProps) {
             disabled={typeMutation.isPending}
             isError={typeMutation.isError}
             errorMessage="Failed to update category"
+          />
+        </DetailRow>
+        <DetailRow label="Priority">
+          <EnumSelect
+            value={ticket.priority}
+            options={PRIORITIES}
+            labels={PRIORITY_LABELS}
+            onValueChange={(val) => priorityMutation.mutate(val)}
+            disabled={priorityMutation.isPending}
+            isError={priorityMutation.isError}
+            errorMessage="Failed to update priority"
           />
         </DetailRow>
         <DetailRow label="Assigned to">

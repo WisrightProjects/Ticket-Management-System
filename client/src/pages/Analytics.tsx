@@ -418,10 +418,10 @@ export default function Analytics() {
                 <YAxis
                   type="category"
                   dataKey="clientName"
-                  tick={{ fontSize: 12, fill: "#374151" }}
+                  tick={{ fontSize: 10, fill: "#374151" }}
                   tickLine={false}
                   axisLine={false}
-                  width={130}
+                  width={80}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="count" fill="#3B82F6" radius={[0, 4, 4, 0]} />
@@ -487,10 +487,10 @@ export default function Analytics() {
               <YAxis
                 type="category"
                 dataKey="name"
-                tick={{ fontSize: 12, fill: "#374151" }}
+                tick={{ fontSize: 10, fill: "#374151" }}
                 tickLine={false}
                 axisLine={false}
-                width={110}
+                width={80}
               />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="count" radius={[0, 4, 4, 0]}>
@@ -508,7 +508,7 @@ export default function Analytics() {
         <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
           <SectionHeader title="Agent Performance" />
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[700px] w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
                   <th className="text-left py-2 px-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Name</th>

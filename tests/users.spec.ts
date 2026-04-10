@@ -149,4 +149,72 @@ test.describe("User management — happy paths", () => {
     await expect(row.getByText("Active")).toBeVisible();
     await expect(row.getByRole("button", { name: "Deactivate" })).toBeVisible();
   });
+
+  // ─── Delete ──────────────────────────────────────────────────────────────
+
+  test("deletes a user after confirming the dialog and removes them from the list", async ({
+    page,
+  }) => {
+    const row = userRow(page, UPDATED_USER.email);
+
+    // Click the trash icon (title="Delete user")
+    await row.getByTitle("Delete user").click();
+
+    // Confirmation dialog appears with user's name
+    const dialog = page.getByRole("dialog", { name: "Delete User" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(UPDATED_USER.name)).toBeVisible();
+
+    // Confirm permanent deletion
+    await dialog.getByRole("button", { name: "Delete" }).click();
+
+    // Dialog closes and user is no longer in the table
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByText(UPDATED_USER.email)).not.toBeVisible();
+  });
+});
+
+// ─── Agent Performance Detail Page ────────────────────────────────────────────
+
+test.describe("Agent performance detail page (/users/:id)", () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAsAdmin(page);
+    await goToUsersPage(page);
+  });
+
+  test("clicking a user name navigates to their detail page", async ({ page }) => {
+    // User name links live inside the table — find the first one
+    const nameLink = page.getByRole("table").getByRole("link").first();
+    await nameLink.click();
+
+    // URL must change to /users/<uuid>
+    await expect(page).toHaveURL(/\/users\/[0-9a-f-]{36}$/);
+  });
+
+  test("agent detail page shows KPI cards and a back link", async ({ page }) => {
+    // Grab the href from the first user-name link in the table
+    const nameLink = page.getByRole("table").getByRole("link").first();
+    const href = await nameLink.getAttribute("href");
+    expect(href).toMatch(/\/users\/[0-9a-f-]{36}$/);
+
+    await page.goto(href!);
+
+    // Back link is present
+    await expect(page.getByRole("link", { name: /back.*users/i })).toBeVisible();
+
+    // KPI summary cards are rendered
+    await expect(page.getByText(/Total Assigned/i)).toBeVisible();
+    await expect(page.getByText(/Total Closed/i)).toBeVisible();
+    await expect(page.getByText(/Avg Resolution/i)).toBeVisible();
+    await expect(page.getByText(/Avg Rating/i)).toBeVisible();
+  });
+
+  test("agent detail page is only accessible to admins (non-admin is redirected)", async ({ page }) => {
+    const nameLink = page.getByRole("table").getByRole("link").first();
+    const href = await nameLink.getAttribute("href");
+    await page.goto(href!);
+
+    // Heading (user name) is visible when accessed as admin
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  });
 });

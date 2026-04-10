@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function PortalForgotPassword() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
 
   const slug = localStorage.getItem("portal-slug") ?? "";
   const loginHref = slug ? `/portal/${slug}/login` : "/";
@@ -39,17 +42,27 @@ export default function PortalForgotPassword() {
     <div className="min-h-screen flex flex-col" style={{ background: "var(--rt-bg)" }}>
       {/* Header */}
       <header style={{ background: "var(--rt-accent)", flexShrink: 0 }}>
-        <div className="flex items-center px-4 sm:px-6" style={{ height: "56px" }}>
+        <div className="flex items-center justify-between px-4 sm:px-6" style={{ height: "56px" }}>
           <div className="flex items-center gap-2.5">
-            <img src="/wisright-logo.png" alt="Right Tracker" style={{ height: "26px", width: "auto", objectFit: "contain" }} />
-            <div style={{ width: "1px", height: "18px", background: "rgba(255,255,255,0.3)" }} />
-            <span className="text-sm font-bold tracking-tight" style={{ color: "#ffffff" }}>
-              Right <span style={{ color: "rgba(255,255,255,0.75)" }}>Tracker</span>
-            </span>
-            <span className="text-xs px-2 py-0.5 rounded-full font-medium ml-1" style={{ background: "rgba(0,0,0,0.2)", color: "rgba(255,255,255,0.85)" }}>
-              Customer Portal
+            <div className="flex items-center justify-center rounded-lg px-5 py-1.5" style={{ background: "#ffffff" }}>
+              <img src="/wisright-logo.png" alt="Right Tracker" style={{ height: "38px", width: "auto", objectFit: "contain" }} />
+            </div>
+            <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.3)" }} />
+            <span className="text-sm font-bold" style={{ color: "#ffffff", whiteSpace: "nowrap" }}>
+              Right Tracker
+              <span className="hidden sm:inline font-normal text-xs ml-1.5" style={{ color: "rgba(255,255,255,0.7)" }}>— WisRight's Support Tool</span>
             </span>
           </div>
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200"
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            style={{ background: "rgba(0,0,0,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#ffffff" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.22)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.12)"; }}
+          >
+            {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </header>
 

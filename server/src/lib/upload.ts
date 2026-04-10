@@ -21,7 +21,8 @@ const storage = multer.diskStorage({
 // H-2 — cross-validate MIME type against file extension so an SVG/HTML
 // disguised as image/jpeg (correct MIME, wrong extension) is still rejected
 const MIME_TO_EXT: Record<string, Set<string>> = {
-  "image/jpeg": new Set([".jpg", ".jpeg"]),
+  "image/jpeg": new Set([".jpg", ".jpeg", ".jfif", ".jpe"]),
+  "image/jpg":  new Set([".jpg", ".jpeg", ".jfif", ".jpe"]), // non-standard alias some browsers send
   "image/png":  new Set([".png"]),
   "image/gif":  new Set([".gif"]),
   "image/webp": new Set([".webp"]),

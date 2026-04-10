@@ -4,8 +4,11 @@ import { timingSafeEqual } from "node:crypto";
 export function requireWebhookSecret(req: Request, res: Response, next: NextFunction): void {
   const secret = process.env.WEBHOOK_SECRET;
   if (!secret) {
-    // No secret configured — allow all (useful in dev/test)
-    next();
+    if (process.env.NODE_ENV === "test") {
+      next();
+      return;
+    }
+    res.status(500).json({ error: "Server misconfiguration: WEBHOOK_SECRET is not set." });
     return;
   }
   const auth = req.headers["authorization"] ?? "";

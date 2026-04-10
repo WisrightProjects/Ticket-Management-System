@@ -50,9 +50,16 @@ function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl text-center">
-            Ticket Management System
+        <CardHeader className="pb-4">
+          {/* Logo inside white card */}
+          <div className="flex justify-center mb-4">
+            <div className="flex items-center justify-center rounded-xl px-5 py-3" style={{ background: "#ffffff", border: "1px solid #e5e7eb" }}>
+              <img src="/wisright-logo.png" alt="Right Tracker" style={{ height: "64px", width: "auto", objectFit: "contain" }} />
+            </div>
+          </div>
+          <CardTitle className="text-xl text-center">
+            Right Tracker{" "}
+            <span className="font-normal text-base text-muted-foreground">(Admin Login)</span>
           </CardTitle>
         </CardHeader>
         <CardContent>

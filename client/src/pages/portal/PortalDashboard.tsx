@@ -250,7 +250,7 @@ export default function PortalDashboard() {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={barData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barSize={14}>
+            <BarChart data={barData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }} barSize={8}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
               <XAxis
                 dataKey="day"

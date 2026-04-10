@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { X, ImageIcon, Upload } from "lucide-react";
 
 interface ImageUploadFieldProps {
@@ -8,7 +8,7 @@ interface ImageUploadFieldProps {
 
 const MAX_SIZE = 1 * 1024 * 1024; // 1 MB
 const MAX_FILES = 5;
-const ALLOWED = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+const ALLOWED = new Set(["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]);
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -20,6 +20,9 @@ export function ImageUploadField({ files, onChange }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
+  // Create blob preview URLs; revoke previous set when files change
+  const previews = useMemo(() => files.map((f) => URL.createObjectURL(f)), [files]);
+  useEffect(() => () => { previews.forEach((u) => URL.revokeObjectURL(u)); }, [previews]);
 
   const addFiles = useCallback(
     (incoming: FileList | null) => {
@@ -86,7 +89,7 @@ export function ImageUploadField({ files, onChange }: ImageUploadFieldProps) {
           <input
             ref={inputRef}
             type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
+            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,.jfif,.jpe"
             multiple
             className="hidden"
             onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
@@ -97,39 +100,37 @@ export function ImageUploadField({ files, onChange }: ImageUploadFieldProps) {
       {/* Previews */}
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {files.map((file, idx) => {
-            const src = URL.createObjectURL(file);
-            return (
-              <div
-                key={`${file.name}-${idx}`}
-                className="relative group w-20 h-20 rounded-lg overflow-hidden border border-gray-200"
-              >
+          {files.map((file, idx) => (
+            <div
+              key={`${file.name}-${idx}`}
+              className="relative group w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-gray-200"
+            >
+              {previews[idx] && (
                 <img
-                  src={src}
+                  src={previews[idx]}
                   alt={file.name}
                   className="w-full h-full object-cover"
-                  onLoad={() => URL.revokeObjectURL(src)}
                 />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); remove(idx); }}
-                  className="absolute top-1 right-1 bg-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow"
-                  title="Remove"
-                >
-                  <X className="w-3 h-3 text-gray-700" />
-                </button>
-                <p className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] px-1 py-0.5 truncate">
-                  {formatSize(file.size)}
-                </p>
-              </div>
-            );
-          })}
+              )}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); remove(idx); }}
+                className="absolute top-1 right-1 bg-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                title="Remove"
+              >
+                <X className="w-3 h-3 text-gray-700" />
+              </button>
+              <p className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] px-1 py-0.5 truncate">
+                {formatSize(file.size)}
+              </p>
+            </div>
+          ))}
           {files.length < MAX_FILES && (
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center hover:border-orange-400 transition-colors"
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center hover:border-orange-400 transition-colors"
             >
               <ImageIcon className="w-5 h-5 text-gray-400" />
             </button>

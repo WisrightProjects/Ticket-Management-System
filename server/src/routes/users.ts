@@ -4,8 +4,7 @@ import { hashPassword } from "better-auth/crypto";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../lib/prisma.js";
 import { requireAdmin } from "../middleware/auth.js";
-import { ROLES, createUserSchema, editUserSchema } from "@tms/core";
-import { getEmployeeDirectory } from "../lib/hrms.js";
+import { ROLES, STATUS, createUserSchema, editUserSchema } from "@tms/core";
 
 const router = Router();
 
@@ -13,39 +12,16 @@ const router = Router();
 router.use(requireAdmin);
 
 // GET /api/users — list all users (TMS accounts + HRMS employees merged)
+// HRMS employees without TMS accounts are auto-provisioned as Agents on first load.
 router.get("/", async (_req: Request, res: Response) => {
   try {
-    const [tmsUsers, hrmsEmployees] = await Promise.all([
-      prisma.user.findMany({
-        where: { role: { in: ["ADMIN", "AGENT"] } },
-        select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      getEmployeeDirectory(),
-    ]);
+    const users = await prisma.user.findMany({
+      where: { role: { in: [ROLES.ADMIN, ROLES.AGENT] } },
+      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
 
-    // TMS users with source flag
-    const tmsEmailSet = new Set(tmsUsers.map((u) => u.email.toLowerCase()));
-    const tmsResult = tmsUsers.map((u) => ({
-      ...u,
-      createdAt: u.createdAt.toISOString(),
-      source: "TMS" as const,
-    }));
-
-    // HRMS-only employees (not yet in TMS)
-    const hrmsOnly = hrmsEmployees
-      .filter((e) => e.email && !tmsEmailSet.has(e.email.toLowerCase()))
-      .map((e) => ({
-        id:        `hrms:${e.id}`,
-        name:      e.name,
-        email:     e.email,
-        role:      "AGENT" as const,
-        isActive:  true,
-        createdAt: null,
-        source:    "HRMS" as const,
-      }));
-
-    res.json([...tmsResult, ...hrmsOnly]);
+    res.json(users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString(), source: "TMS" as const })));
   } catch {
     res.status(500).json({ error: "Failed to fetch users" });
   }
@@ -232,6 +208,166 @@ router.patch("/:id/status", async (req: Request<{ id: string }>, res: Response) 
     res.json(user);
   } catch {
     res.status(500).json({ error: "Failed to update user status" });
+  }
+});
+
+// DELETE /api/users/:id — permanently delete a user
+router.delete("/:id", async (req: Request<{ id: string }>, res: Response) => {
+  const id = req.params.id;
+
+  if (!req.user) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+
+  if (req.user.id === id) {
+    res.status(400).json({ error: "You cannot delete your own account" });
+    return;
+  }
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const adminId = req.user.id;
+
+    await prisma.$transaction(async (tx) => {
+      // Unassign tickets assigned to this user
+      await tx.ticket.updateMany({ where: { assignedToId: id }, data: { assignedToId: null } });
+      // Reassign ticket ownership, comments, and history to the acting admin
+      await tx.ticket.updateMany({ where: { createdById: id }, data: { createdById: adminId } });
+      await tx.comment.updateMany({ where: { authorId: id }, data: { authorId: adminId } });
+      await tx.ticketHistory.updateMany({ where: { changedById: id }, data: { changedById: adminId } });
+      // Delete auth records then the user
+      await tx.session.deleteMany({ where: { userId: id } });
+      await tx.account.deleteMany({ where: { userId: id } });
+      await tx.user.delete({ where: { id } });
+    });
+
+    res.status(204).send();
+  } catch {
+    res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
+// GET /api/users/:id/stats — per-agent performance stats
+router.get("/:id/stats", async (req: Request<{ id: string }>, res: Response) => {
+  const { id } = req.params;
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, name: true, email: true, role: true, isActive: true },
+  });
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  try {
+    const [byStatus, byPriority, byType, byProject, ratingAgg, closedTickets, recentTickets, monthlyRaw] =
+      await Promise.all([
+        prisma.ticket.groupBy({
+          by: ["status"],
+          where: { assignedToId: id },
+          _count: { status: true },
+        }),
+        prisma.ticket.groupBy({
+          by: ["priority"],
+          where: { assignedToId: id },
+          _count: { priority: true },
+        }),
+        prisma.ticket.groupBy({
+          by: ["type"],
+          where: { assignedToId: id },
+          _count: { type: true },
+        }),
+        prisma.ticket.groupBy({
+          by: ["hrmsProjectName"],
+          where: { assignedToId: id, hrmsProjectName: { not: null } },
+          _count: { hrmsProjectName: true },
+          orderBy: { _count: { hrmsProjectName: "desc" } },
+          take: 10,
+        }),
+        prisma.ticket.aggregate({
+          where: { assignedToId: id, rating: { not: null } },
+          _avg: { rating: true },
+          _count: { rating: true },
+        }),
+        prisma.ticket.findMany({
+          where: { assignedToId: id, status: STATUS.CLOSED },
+          select: { createdAt: true, updatedAt: true },
+        }),
+        prisma.ticket.findMany({
+          where: { assignedToId: id },
+          orderBy: { updatedAt: "desc" },
+          take: 30,
+          select: {
+            ticketId: true, title: true, status: true, priority: true,
+            type: true, hrmsProjectName: true, createdAt: true, updatedAt: true, rating: true,
+          },
+        }),
+        prisma.$queryRaw<Array<{ month: string; month_date: Date; opened: bigint; closed: bigint }>>`
+          SELECT
+            TO_CHAR(DATE_TRUNC('month', "createdAt"), 'Mon YY') AS month,
+            DATE_TRUNC('month', "createdAt")                    AS month_date,
+            COUNT(*)                                            AS opened,
+            COUNT(CASE WHEN status = 'CLOSED' THEN 1 END)      AS closed
+          FROM tickets
+          WHERE "assignedToId" = ${id}
+            AND "createdAt" >= DATE_TRUNC('month', NOW()) - INTERVAL '5 months'
+          GROUP BY DATE_TRUNC('month', "createdAt")
+          ORDER BY DATE_TRUNC('month', "createdAt")
+        `,
+      ]);
+
+    const totalAssigned = byStatus.reduce((s, r) => s + r._count.status, 0);
+    const totalClosed   = byStatus.find((r) => r.status === STATUS.CLOSED)?._count.status ?? 0;
+    const avgResolutionMs =
+      closedTickets.length > 0
+        ? closedTickets.reduce((s, t) => s + (t.updatedAt.getTime() - t.createdAt.getTime()), 0) /
+          closedTickets.length
+        : null;
+
+    res.json({
+      user,
+      summary: {
+        totalAssigned,
+        totalClosed,
+        avgResolutionMs,
+        avgRating:  ratingAgg._avg.rating,
+        ratedCount: ratingAgg._count.rating,
+      },
+      byStatus:  byStatus.map((r) => ({ status: r.status, count: r._count.status })),
+      byPriority: byPriority.map((r) => ({ priority: r.priority, count: r._count.priority })),
+      byType:    byType.map((r) => ({ type: r.type, count: r._count.type })),
+      byProject: byProject.map((r) => ({ project: r.hrmsProjectName ?? "Unknown", count: r._count.hrmsProjectName })),
+      monthlyTrend: monthlyRaw.map((r) => ({
+        month:  r.month,
+        opened: Number(r.opened),
+        closed: Number(r.closed),
+      })),
+      recentTickets: recentTickets.map((t) => ({
+        ticketId:       t.ticketId,
+        title:          t.title,
+        status:         t.status,
+        priority:       t.priority,
+        type:           t.type,
+        project:        t.hrmsProjectName ?? null,
+        createdAt:      t.createdAt.toISOString(),
+        updatedAt:      t.updatedAt.toISOString(),
+        resolutionDays: t.status === STATUS.CLOSED
+          ? Math.round((t.updatedAt.getTime() - t.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+          : null,
+        rating: t.rating ?? null,
+      })),
+    });
+  } catch (e) {
+    console.error("[stats]", e);
+    res.status(500).json({ error: "Failed to fetch stats" });
   }
 });
 

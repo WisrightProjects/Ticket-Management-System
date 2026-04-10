@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useSession, signOut } from "@/lib/auth-client";
-import { LogOut, Inbox, UserRound, Menu, LayoutDashboard } from "lucide-react";
+import { LogOut, Inbox, UserRound, Menu, LayoutDashboard, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const NAV_ITEMS = [
   { path: "/portal/dashboard", label: "Dashboard",  icon: LayoutDashboard },
-  { path: "/portal/tickets",   label: "My Tickets", icon: Inbox            },
+  { path: "/portal/tickets",   label: "My Tickets", icon: Inbox           },
 ];
 
 export default function PortalLayout() {
   const { data: session } = useSession();
   const location  = useLocation();
   const navigate  = useNavigate();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
 
   const userName =
     (session?.user as unknown as { name?: string } | undefined)?.name ?? "Customer";
@@ -24,8 +27,10 @@ export default function PortalLayout() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const isActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(path + "/");
+  const isActive = (path: string) => {
+    if (path.includes("?")) return false; // action links never show as active
+    return location.pathname === path || location.pathname.startsWith(path + "/");
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
@@ -52,25 +57,34 @@ export default function PortalLayout() {
           </button>
           {/* Logo */}
           <div className="flex items-center gap-2.5 flex-1 flex-shrink-0">
-            <img
-              src="/wisright-logo.png"
-              alt="Right Tracker"
-              style={{ height: "26px", width: "auto", objectFit: "contain" }}
-            />
-            <div style={{ width: "1px", height: "18px", background: "rgba(255,255,255,0.3)" }} />
-            <span className="text-sm font-bold tracking-tight" style={{ color: "#ffffff" }}>
-              Right <span style={{ color: "rgba(255,255,255,0.75)" }}>Tracker</span>
-            </span>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
-              style={{ background: "rgba(0,0,0,0.2)", color: "rgba(255,255,255,0.85)" }}
-            >
-              Customer Portal
+            <div className="flex items-center justify-center rounded-lg px-5 py-1.5" style={{ background: "#ffffff" }}>
+              <img
+                src="/wisright-logo.png"
+                alt="Right Tracker"
+                style={{ height: "38px", width: "auto", objectFit: "contain" }}
+              />
+            </div>
+            <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.3)" }} />
+            <span className="text-sm font-bold" style={{ color: "#ffffff", whiteSpace: "nowrap" }}>
+              Right Tracker
+              <span className="hidden sm:inline font-normal text-xs ml-1.5" style={{ color: "rgba(255,255,255,0.7)" }}>— WisRight's Support Tool</span>
             </span>
           </div>
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200"
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              style={{ background: "rgba(0,0,0,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#ffffff" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.22)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.12)"; }}
+            >
+              {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
+
             {/* Divider */}
             <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.25)" }} />
 

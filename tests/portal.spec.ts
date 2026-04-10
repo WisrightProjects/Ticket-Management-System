@@ -26,11 +26,13 @@ async function loginAs(request: APIRequestContext, email: string, password: stri
   });
 }
 
-/** GET /api/portal/captcha — fetches a server-signed captcha challenge */
+/** GET /api/portal/captcha — fetches a server-signed captcha challenge.
+ *  In test mode the server also returns `code` (plaintext) so E2E tests can
+ *  submit a correct answer without breaking the security model in production. */
 async function getCaptcha(request: APIRequestContext) {
   const res = await request.get(`${BASE}/api/portal/captcha`);
   expect(res.status()).toBe(200);
-  return res.json() as Promise<{ code: string; token: string }>;
+  return res.json() as Promise<{ token: string; code?: string }>;
 }
 
 /** POST /api/webhooks/email — creates a ticket as a seeded email sender */
@@ -356,28 +358,88 @@ test.describe("GET /api/portal/:slug — public HRMS lookup", () => {
   });
 });
 
-// ─── GET /api/portal/captcha — server-side CAPTCHA endpoint (M11) ─────────────
+// ─── GET /api/portal/captcha — server-side CAPTCHA endpoint ──────────────────
 
 test.describe("GET /api/portal/captcha — server-side CAPTCHA", () => {
-  test("returns 200 with a code and a signed token", async ({ request }) => {
+  test("returns 200 with a 3-part token — no plaintext code in production", async ({ request }) => {
     const res = await request.get(`${BASE}/api/portal/captcha`);
     expect(res.status()).toBe(200);
-    const json = await res.json() as { code: string; token: string };
-    expect(typeof json.code).toBe("string");
-    expect(json.code.length).toBe(5);
+    const json = await res.json() as { token: string; code?: string };
     expect(typeof json.token).toBe("string");
-    // Token format: <timestamp>.<hex-sig>
-    expect(json.token).toMatch(/^\d+\.[0-9a-f]+$/);
+    // Token must be 3-part: ts.encryptedCode.hmac (NOT the old 2-part ts.sig format)
+    const parts = json.token.split(".");
+    expect(parts.length).toBe(3);
+    expect(parts[0]).toMatch(/^\d+$/);         // timestamp
+    expect(parts[1]).toMatch(/^[0-9a-f]+$/);   // encrypted code (hex)
+    expect(parts[2]).toMatch(/^[0-9a-f]+$/);   // HMAC (hex)
+    // Test-mode backdoor: code must be present and 5 characters
+    expect(typeof json.code).toBe("string");
+    expect((json.code as string).length).toBe(5);
   });
 
-  test("returns a different code on each call", async ({ request }) => {
-    const [a, b] = await Promise.all([
-      getCaptcha(request),
-      getCaptcha(request),
-    ]);
-    // It's theoretically possible for two random 5-char codes to collide,
-    // but the probability is negligible (~1/57^5). We check tokens instead.
+  test("each call produces a unique token", async ({ request }) => {
+    const [a, b] = await Promise.all([getCaptcha(request), getCaptcha(request)]);
     expect(a.token).not.toBe(b.token);
+  });
+});
+
+// ─── GET /api/portal/captcha-image — server-rendered SVG ─────────────────────
+
+test.describe("GET /api/portal/captcha-image — server-rendered CAPTCHA image", () => {
+  test("returns SVG for a valid token", async ({ request }) => {
+    const { token } = await getCaptcha(request);
+    const res = await request.get(
+      `${BASE}/api/portal/captcha-image?token=${encodeURIComponent(token)}`,
+    );
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("image/svg+xml");
+    expect(res.headers()["cache-control"]).toContain("no-store");
+    const body = await res.text();
+    expect(body).toContain("<svg");
+  });
+
+  test("returns 400 for a malformed token", async ({ request }) => {
+    const res = await request.get(`${BASE}/api/portal/captcha-image?token=invalid.token`);
+    expect(res.status()).toBe(400);
+  });
+
+  test("returns 400 when token is missing", async ({ request }) => {
+    const res = await request.get(`${BASE}/api/portal/captcha-image`);
+    expect(res.status()).toBe(400);
+  });
+});
+
+// ─── CAPTCHA single-use enforcement ──────────────────────────────────────────
+
+test.describe("CAPTCHA — single-use token enforcement", () => {
+  test("second submission with the same token is rejected as replayed", async ({ request }) => {
+    const { token, code } = await getCaptcha(request);
+    expect(code).toBeDefined();
+
+    const payload = {
+      name:          "Alice",
+      email:         "alice@example.com",
+      subject:       "Help needed",
+      body:          "I need assistance.",
+      captchaToken:  token,
+      captchaAnswer: code!,
+    };
+
+    // First use — captcha valid, HRMS slug unknown → 404 (captcha passed)
+    const first = await request.post(`${BASE}/api/portal/unknown-slug-xyz/tickets`, {
+      data:    payload,
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(first.status()).toBe(404);
+
+    // Second use — same token+answer → captcha rejected (already used)
+    const second = await request.post(`${BASE}/api/portal/unknown-slug-xyz/tickets`, {
+      data:    payload,
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(second.status()).toBe(400);
+    const json = await second.json();
+    expect(json.error).toMatch(/captcha/i);
   });
 });
 
@@ -448,7 +510,7 @@ test.describe("POST /api/portal/:slug/tickets — public portal submission", () 
         subject:       "Help needed",
         body:          "I need assistance.",
         captchaToken:  token,
-        captchaAnswer: code,
+        captchaAnswer: code!, // code is present in test mode via server backdoor
       },
       headers: { "Content-Type": "application/json" },
     });
@@ -544,7 +606,7 @@ test.describe("POST /api/portal/:slug/tickets — image upload validation", () =
         subject:       "Valid image test",
         body:          "Attaching a valid PNG.",
         captchaToken:  token,
-        captchaAnswer: code,
+        captchaAnswer: code!, // code is present in test mode via server backdoor
         attachments: {
           name:     "photo.png",
           mimeType: "image/png",

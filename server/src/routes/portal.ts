@@ -107,26 +107,50 @@ function generateCaptchaCode(): string {
   return Array.from(bytes, (b) => CAPTCHA_CHARS[b % CAPTCHA_CHARS.length]).join("");
 }
 
-function signCaptcha(code: string, ts: string): string {
+// XOR-encrypt code using keystream derived from HMAC(ts, CAPTCHA_SECRET)
+function encryptCode(code: string, ts: string): string {
+  const keyStream = createHmac("sha256", CAPTCHA_SECRET).update(ts).digest();
+  const codeBytes = Buffer.from(code, "utf8");
+  return Buffer.from(codeBytes.map((b, i) => b ^ keyStream[i])).toString("hex");
+}
+
+function decryptCode(encryptedCode: string, ts: string): string {
+  const keyStream = createHmac("sha256", CAPTCHA_SECRET).update(ts).digest();
+  const encrypted = Buffer.from(encryptedCode, "hex");
+  return Buffer.from(encrypted.map((b, i) => b ^ keyStream[i])).toString("utf8");
+}
+
+function signCaptcha(ts: string, encryptedCode: string): string {
   return createHmac("sha256", CAPTCHA_SECRET)
-    .update(`${code.toLowerCase()}:${ts}`)
+    .update(`${ts}:${encryptedCode}`)
     .digest("hex");
+}
+
+// Single-use enforcement — prevents token replay within the 10-min validity window
+const usedCaptchaSignatures = new Set<string>();
+function markCaptchaUsed(sig: string): void {
+  usedCaptchaSignatures.add(sig);
+  setTimeout(() => usedCaptchaSignatures.delete(sig), 10 * 60 * 1000 + 5000);
 }
 
 export function verifyCaptchaToken(token: string, answer: string): boolean {
   if (!token || !answer) return false;
-  const dot = token.indexOf(".");
-  if (dot === -1) return false;
-  const ts  = token.slice(0, dot);
-  const sig = token.slice(dot + 1);
-  // Token must be used within 10 minutes
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  const [ts, encryptedCode, sig] = parts;
   if (Date.now() - parseInt(ts, 10) > 10 * 60 * 1000) return false;
-  const expected = signCaptcha(answer.toLowerCase().trim(), ts);
+  if (usedCaptchaSignatures.has(sig)) return false;
+  const expected = signCaptcha(ts, encryptedCode);
+  let valid = false;
   try {
-    return timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expected, "hex"));
-  } catch {
-    return false;
-  }
+    valid = timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expected, "hex"));
+  } catch { return false; }
+  if (!valid) return false;
+  let recovered: string;
+  try { recovered = decryptCode(encryptedCode, ts); } catch { return false; }
+  if (recovered.toLowerCase() !== answer.toLowerCase().trim()) return false;
+  markCaptchaUsed(sig);
+  return true;
 }
 
 const captchaLimiter = rateLimit({
@@ -627,8 +651,48 @@ router.patch("/tickets/:id/rating", requireCustomer, async (req: Request<{ id: s
 router.get("/captcha", captchaLimiter, (_req, res) => {
   const code = generateCaptchaCode();
   const ts   = Date.now().toString();
-  const sig  = signCaptcha(code, ts);
-  res.json({ code, token: `${ts}.${sig}` });
+  const enc  = encryptCode(code, ts);
+  const sig  = signCaptcha(ts, enc);
+  const response: Record<string, string> = { token: `${ts}.${enc}.${sig}` };
+  // Expose plaintext code only in test environment so E2E tests can submit valid answers
+  if (process.env.NODE_ENV === "test") response.code = code;
+  res.json(response);
+});
+
+// GET /captcha-image — serves CAPTCHA challenge as SVG image (no plaintext code sent to client)
+router.get("/captcha-image", captchaLimiter, (req, res) => {
+  const token = (req.query["token"] as string) ?? "";
+  const parts = token.split(".");
+  if (parts.length !== 3) { res.status(400).send("Bad token"); return; }
+  const [ts, encryptedCode, sig] = parts;
+  if (Date.now() - parseInt(ts, 10) > 10 * 60 * 1000) { res.status(400).send("Expired"); return; }
+  const expected = signCaptcha(ts, encryptedCode);
+  let valid = false;
+  try { valid = timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(expected, "hex")); } catch {}
+  if (!valid) { res.status(400).send("Invalid token"); return; }
+  let code: string;
+  try { code = decryptCode(encryptedCode, ts); } catch { res.status(400).send("Decode error"); return; }
+
+  // Generate SVG with per-request visual noise (randomBytes is cosmetic only)
+  const seed = randomBytes(32);
+  const COLORS = ["#e05a00", "#1a6bb5", "#2a8a3e", "#8b2be2", "#c0392b", "#16638a"];
+  const letters = code.split("").map((ch, i) => {
+    const x     = 20 + i * 26 + (seed[i] % 7) - 3;
+    const y     = 28 + (seed[i + 5] % 9) - 4;
+    const rot   = (seed[i + 10] % 30) - 15;
+    const color = COLORS[i % COLORS.length];
+    const size  = 20 + (seed[i + 20] % 6);
+    return `<text x="${x}" y="${y}" transform="rotate(${rot},${x},${y})" font-family="'Courier New',monospace" font-size="${size}" font-weight="bold" fill="${color}">${ch}</text>`;
+  });
+  const lines = Array.from({ length: 4 }, (_, i) => {
+    const b = i * 8;
+    return `<line x1="${seed[b] % 160}" y1="${seed[b + 1] % 48}" x2="${seed[b + 2] % 160}" y2="${seed[b + 3] % 48}" stroke="rgba(0,0,0,0.12)" stroke-width="1"/>`;
+  });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="48" viewBox="0 0 160 48"><rect width="160" height="48" fill="#f5f5f0"/>${lines.join("")}${letters.join("")}</svg>`;
+
+  res.setHeader("Content-Type", "image/svg+xml");
+  res.setHeader("Cache-Control", "no-store");
+  res.send(svg);
 });
 
 // ──────────────────────────────────────

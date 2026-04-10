@@ -185,6 +185,11 @@ export const updateTypeSchema = z.object({
 });
 export type UpdateTypeInput = z.infer<typeof updateTypeSchema>;
 
+export const updatePrioritySchema = z.object({
+  priority: z.enum(PRIORITIES),
+});
+export type UpdatePriorityInput = z.infer<typeof updatePrioritySchema>;
+
 // ──────────────────────────────────────
 // Portal schemas
 // Used by the customer self-service portal routes (/api/portal/*)

@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ChevronUp,
   ChevronDown,
@@ -217,6 +217,8 @@ function SkeletonRow({ colCount }: { colCount: number }) {
 function Tickets() {
   "use no memo";
 
+  const [searchParams] = useSearchParams();
+
   const [sorting, setSorting]       = useState<SortingState>([{ id: "createdAt", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [searchInput, setSearchInput]       = useState("");
@@ -225,7 +227,7 @@ function Tickets() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityValue | "">("");
   const [typeFilter, setTypeFilter]         = useState<TicketTypeValue | "">("");
   const [assigneeFilter, setAssigneeFilter] = useState("");
-  const [clientFilter,  setClientFilter]   = useState("");
+  const [clientFilter,  setClientFilter]   = useState(searchParams.get("clientId") ?? "");
   const [dateFrom, setDateFrom]             = useState("");
   const [dateTo, setDateTo]                 = useState("");
 
@@ -364,9 +366,8 @@ function Tickets() {
             onValueChange={(v) => setStatusFilter((v as string) === "all" ? "" : (v as StatusValue))}
           >
             <SelectTrigger
-              className="h-8 text-xs rounded-lg px-3 border"
+              className="h-8 text-xs rounded-lg px-3 border w-full sm:w-[140px]"
               style={{
-                width: "140px",
                 background: "var(--rt-surface)",
                 border:     "1px solid var(--rt-border)",
                 color:      statusFilter ? "var(--rt-text-2)" : "var(--rt-text-3)",
@@ -392,9 +393,8 @@ function Tickets() {
             onValueChange={(v) => setTypeFilter((v as string) === "all" ? "" : (v as TicketTypeValue))}
           >
             <SelectTrigger
-              className="h-8 text-xs rounded-lg px-3 border"
+              className="h-8 text-xs rounded-lg px-3 border w-full sm:w-[148px]"
               style={{
-                width: "148px",
                 background: "var(--rt-surface)",
                 border:     "1px solid var(--rt-border)",
                 color:      typeFilter ? "var(--rt-text-2)" : "var(--rt-text-3)",
@@ -417,9 +417,8 @@ function Tickets() {
             onValueChange={(v) => setPriorityFilter((v as string) === "all" ? "" : (v as PriorityValue))}
           >
             <SelectTrigger
-              className="h-8 text-xs rounded-lg px-3 border"
+              className="h-8 text-xs rounded-lg px-3 border w-full sm:w-[136px]"
               style={{
-                width: "136px",
                 background: "var(--rt-surface)",
                 border:     "1px solid var(--rt-border)",
                 color:      priorityFilter ? "var(--rt-text-2)" : "var(--rt-text-3)",
@@ -442,16 +441,19 @@ function Tickets() {
             onValueChange={(v) => setClientFilter(!v || v === "all" ? "" : v)}
           >
             <SelectTrigger
-              className="h-8 text-xs rounded-lg px-3"
+              className="h-8 text-xs rounded-lg px-3 w-full sm:w-[160px]"
               style={{
-                width:      "160px",
                 background: "var(--rt-surface)",
                 border:     "1px solid var(--rt-border)",
                 color:      clientFilter ? "var(--rt-text-2)" : "var(--rt-text-3)",
                 boxShadow:  "none",
               }}
             >
-              <SelectValue placeholder="All clients" />
+              <span className="truncate">
+                {clientFilter
+                  ? (clientList.find((c) => c.id === clientFilter)?.name ?? "Loading…")
+                  : "All clients"}
+              </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="text-xs">All clients</SelectItem>
@@ -467,9 +469,8 @@ function Tickets() {
             onValueChange={(v) => setAssigneeFilter(!v || v === "all" ? "" : v)}
           >
             <SelectTrigger
-              className="h-8 text-xs rounded-lg px-3"
+              className="h-8 text-xs rounded-lg px-3 w-full sm:w-[160px]"
               style={{
-                width:      "160px",
                 background: "var(--rt-surface)",
                 border:     "1px solid var(--rt-border)",
                 color:      assigneeFilter ? "var(--rt-text-2)" : "var(--rt-text-3)",
@@ -487,36 +488,36 @@ function Tickets() {
             </SelectContent>
           </Select>
 
-          {/* Date range — From */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>From</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-8 text-xs rounded-lg px-2 outline-none"
-              style={{
-                background: "var(--rt-surface)",
-                border:     "1px solid var(--rt-border)",
-                color:      "var(--rt-text-2)",
-              }}
-            />
-          </div>
-
-          {/* Date range — To */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>To</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-8 text-xs rounded-lg px-2 outline-none"
-              style={{
-                background: "var(--rt-surface)",
-                border:     "1px solid var(--rt-border)",
-                color:      "var(--rt-text-2)",
-              }}
-            />
+          {/* Date range — From / To */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>From</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-8 text-xs rounded-lg px-2 outline-none"
+                style={{
+                  background: "var(--rt-surface)",
+                  border:     "1px solid var(--rt-border)",
+                  color:      "var(--rt-text-2)",
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>To</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-8 text-xs rounded-lg px-2 outline-none"
+                style={{
+                  background: "var(--rt-surface)",
+                  border:     "1px solid var(--rt-border)",
+                  color:      "var(--rt-text-2)",
+                }}
+              />
+            </div>
           </div>
 
           {hasFilters && (
@@ -560,7 +561,7 @@ function Tickets() {
         {/* ── Table ── */}
         {!isError && (
           <div className="rounded-xl overflow-x-auto" style={{ border: "1px solid var(--rt-border)" }}>
-            <table className="w-full" style={{ borderCollapse: "collapse", background: "var(--rt-surface)" }}>
+            <table className="w-full min-w-[700px]" style={{ borderCollapse: "collapse", background: "var(--rt-surface)" }}>
               <thead>
                 {table.getHeaderGroups().map((hg) => (
                   <tr
@@ -671,7 +672,7 @@ function Tickets() {
                 <button
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150"
+                  className="flex items-center gap-1 px-3 py-2.5 sm:py-1.5 text-xs rounded-lg disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150"
                   style={{
                     background: "var(--rt-surface-2)",
                     border:     "1px solid var(--rt-border-2)",
@@ -693,7 +694,7 @@ function Tickets() {
                 <button
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150"
+                  className="flex items-center gap-1 px-3 py-2.5 sm:py-1.5 text-xs rounded-lg disabled:opacity-25 disabled:cursor-not-allowed transition-all duration-150"
                   style={{
                     background: "var(--rt-surface-2)",
                     border:     "1px solid var(--rt-border-2)",

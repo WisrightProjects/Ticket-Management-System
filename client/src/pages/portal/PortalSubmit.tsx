@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link, Navigate } from "react-router-dom";
 import { useSession, signOut } from "@/lib/auth-client";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ImageUploadField } from "@/components/portal/ImageUploadField";
+import { Sun, Moon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,12 +50,22 @@ type SubmitFormData = z.infer<typeof submitSchema>;
 export default function PortalSubmit() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
   const { data: session, isPending: sessionPending } = useSession();
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [captchaToken, setCaptchaToken]       = useState<string | undefined>();
   const [captchaAnswer, setCaptchaAnswer]     = useState<string>("");
   const [captchaReset, setCaptchaReset]       = useState(0);
+
+  // Stable callback — prevents SimpleCaptcha from seeing a new onVerify reference
+  // every time attachmentFiles changes, which would otherwise retrigger fetchChallenge
+  const handleCaptchaVerify = useCallback((verified: boolean, token?: string, answer?: string) => {
+    setCaptchaVerified(verified);
+    setCaptchaToken(token);
+    setCaptchaAnswer(answer ?? "");
+  }, []);
 
   // Derive customer role — but if the slug doesn't match the stored session slug,
   // sign out and show this client's portal form instead.
@@ -133,7 +145,7 @@ export default function PortalSubmit() {
     mode: "onBlur",
   });
 
-  const mutation = useMutation<SubmitTicketResponse, Error, SubmitFormData>({
+  const mutation = useMutation<SubmitTicketResponse, unknown, SubmitFormData>({
     mutationFn: async (data) => {
       const selectedProject = projects.find((p) => p.id === data.projectId);
       const fd = new FormData();
@@ -160,8 +172,6 @@ export default function PortalSubmit() {
       setCaptchaToken(undefined);
       setCaptchaAnswer("");
       setCaptchaReset((n) => n + 1);
-      // Redirect to login with ticket info so the login page can show a success banner
-      // and pre-fill the sign-up form for first-time customers
       navigate(`/portal/${slug}/login`, {
         replace: true,
         state: {
@@ -171,6 +181,14 @@ export default function PortalSubmit() {
           isNewUser: true,
         },
       });
+    },
+    onError: () => {
+      // Always refresh the CAPTCHA on failure so the stale/expired token
+      // doesn't block every subsequent retry
+      setCaptchaVerified(false);
+      setCaptchaToken(undefined);
+      setCaptchaAnswer("");
+      setCaptchaReset((n) => n + 1);
     },
   });
 
@@ -211,28 +229,46 @@ export default function PortalSubmit() {
           flexShrink:   0,
         }}
       >
-        <div className="flex items-center px-4 sm:px-6" style={{ height: "56px" }}>
+        <div className="flex items-center justify-between px-4 sm:px-6" style={{ height: "56px" }}>
           <div className="flex items-center gap-2.5">
-            <img
-              src="/wisright-logo.png"
-              alt="Right Tracker"
-              style={{ height: "26px", width: "auto", objectFit: "contain" }}
-            />
-            <div style={{ width: "1px", height: "18px", background: "rgba(255,255,255,0.3)" }} />
-            <span className="text-sm font-bold tracking-tight" style={{ color: "#ffffff" }}>
-              Right <span style={{ color: "rgba(255,255,255,0.75)" }}>Tracker</span>
+            <div className="flex items-center justify-center rounded-lg px-5 py-1.5" style={{ background: "#ffffff" }}>
+              <img
+                src="/wisright-logo.png"
+                alt="Right Tracker"
+                style={{ height: "38px", width: "auto", objectFit: "contain" }}
+              />
+            </div>
+            <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.3)" }} />
+            <span className="text-sm font-bold" style={{ color: "#ffffff", whiteSpace: "nowrap" }}>
+              Right Tracker
+              <span className="hidden sm:inline font-normal text-xs ml-1.5" style={{ color: "rgba(255,255,255,0.7)" }}>— WisRight's Support Tool</span>
             </span>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
-              style={{ background: "rgba(0,0,0,0.2)", color: "rgba(255,255,255,0.85)" }}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/portal/${slug}/login`}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150"
+              style={{ color: "#ffffff", border: "1px solid rgba(255,255,255,0.35)", background: "rgba(0,0,0,0.12)" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.22)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.12)"; }}
             >
-              Customer Portal
-            </span>
+              Sign in
+            </Link>
+            <button
+              onClick={toggleTheme}
+              className="flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200"
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              style={{ background: "rgba(0,0,0,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#ffffff" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.22)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.12)"; }}
+            >
+              {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 py-8 sm:py-12 px-4">
+      <div className="flex-1 py-8 sm:py-12 px-4 sm:px-6">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -258,7 +294,7 @@ export default function PortalSubmit() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5">
                 {/* Name */}
                 <div className="space-y-1.5">
                   <Label htmlFor="name">Name</Label>
@@ -347,18 +383,16 @@ export default function PortalSubmit() {
 
                 {/* Simple CAPTCHA */}
                 <SimpleCaptcha
-                  onVerify={(verified, token, answer) => {
-                    setCaptchaVerified(verified);
-                    setCaptchaToken(token);
-                    setCaptchaAnswer(answer ?? "");
-                  }}
+                  onVerify={handleCaptchaVerify}
                   reset={captchaReset}
                 />
 
                 {/* Server error */}
                 {mutation.isError && (
                   <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md">
-                    Failed to submit ticket. Please try again.
+                    {axios.isAxiosError(mutation.error) && mutation.error.response?.data?.error
+                      ? mutation.error.response.data.error
+                      : "Failed to submit ticket. Please try again."}
                   </div>
                 )}
 

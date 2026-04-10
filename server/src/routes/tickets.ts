@@ -8,7 +8,7 @@ import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { requireAuth } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
-import { ticketQuerySchema, assignTicketSchema, updateStatusSchema, updateTypeSchema, createCommentSchema, polishReplySchema, ROLES, COMMENT_SENDER_TYPES } from "@tms/core";
+import { ticketQuerySchema, assignTicketSchema, updateStatusSchema, updateTypeSchema, updatePrioritySchema, createCommentSchema, polishReplySchema, ROLES, COMMENT_SENDER_TYPES } from "@tms/core";
 import { Prisma } from "../generated/prisma/client.js";
 import { sendReplyEmail } from "../lib/mailer.js";
 import { getAllClients, getEmployeeDirectory, getProjectEmployees, type HrmsEmployee } from "../lib/hrms.js";
@@ -166,9 +166,10 @@ router.get("/clients", async (_req, res) => {
 router.get("/assignable-users", async (req, res) => {
   const { projectId } = req.query as { projectId?: string };
 
+  // Only ADMIN and AGENT users can be assigned tickets — never CUSTOMER accounts
   const [users, hrmsEmployees] = await Promise.all([
     prisma.user.findMany({
-      where:   { isActive: true },
+      where:   { isActive: true, role: { in: [ROLES.ADMIN, ROLES.AGENT] } },
       select:  { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
@@ -176,7 +177,6 @@ router.get("/assignable-users", async (req, res) => {
   ]);
 
   const tmsEmailSet  = new Set(users.map((u) => u.email.toLowerCase()));
-  const hrmsEmailSet = new Set(hrmsEmployees.map((e) => e.email.toLowerCase()));
 
   let merged: { id: string; name: string }[];
 
@@ -228,8 +228,9 @@ router.get("/assignable-users", async (req, res) => {
 
     merged = provisionedUsers.filter(Boolean) as { id: string; name: string }[];
   } else {
-    // No project filter — merge ALL active TMS users + HRMS directory employees
-    // TMS users take precedence (they have a real DB id used for assignment)
+    // No project filter (or HRMS returned no project employees) —
+    // show all active ADMIN/AGENT TMS users + any HRMS directory employees
+    // that don't already have a TMS account.
     const hrmsExtra = hrmsEmployees
       .filter((e) => !tmsEmailSet.has(e.email.toLowerCase()) && e.name)
       .map((e) => ({ id: e.id, name: e.name }));
@@ -265,8 +266,12 @@ router.get("/stats", async (_req, res) => {
     ratingAgg,
     openByAgent,
     closedTodayByAgent,
+    totalByAgent,
     agents,
     recentTickets,
+    clientCounts,
+    statusBreakdown,
+    priorityBreakdown,
   ] = await Promise.all([
     prisma.ticket.count(),
     prisma.ticket.count({ where: { status: { in: [...openStatuses] } } }),
@@ -300,8 +305,13 @@ router.get("/stats", async (_req, res) => {
       where: { assignedToId: { not: null }, status: "CLOSED", updatedAt: { gte: todayStart } },
       _count: { _all: true },
     }),
+    prisma.ticket.groupBy({
+      by:    ["assignedToId"],
+      where: { assignedToId: { not: null } },
+      _count: { _all: true },
+    }),
     prisma.user.findMany({
-      where:   { isActive: true, role: { in: ["ADMIN", "AGENT"] } },
+      where:   { isActive: true, role: { in: [ROLES.ADMIN, ROLES.AGENT] } },
       select:  { id: true, name: true, role: true },
       orderBy: { name: "asc" },
     }),
@@ -315,6 +325,27 @@ router.get("/stats", async (_req, res) => {
         updatedAt:  true,
         assignedTo: { select: { name: true } },
       },
+    }),
+    prisma.ticket.findMany({
+      where:   { hrmsClientId: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      take:    10,
+      select: {
+        ticketId:      true,
+        title:         true,
+        status:        true,
+        updatedAt:     true,
+        hrmsClientId:  true,
+        hrmsClientName: true,
+      },
+    }),
+    prisma.ticket.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
+    prisma.ticket.groupBy({
+      by: ["priority"],
+      _count: { _all: true },
     }),
   ]);
 
@@ -346,12 +377,14 @@ router.get("/stats", async (_req, res) => {
   // Build agent workload map
   const openMap        = new Map(openByAgent.map((r) => [r.assignedToId!, r._count._all]));
   const closedTodayMap = new Map(closedTodayByAgent.map((r) => [r.assignedToId!, r._count._all]));
+  const totalMap       = new Map(totalByAgent.map((r) => [r.assignedToId!, r._count._all]));
   const agentWorkload  = agents
     .map((a) => ({
-      id:          a.id,
-      name:        a.name,
-      openTickets: openMap.get(a.id) ?? 0,
-      closedToday: closedTodayMap.get(a.id) ?? 0,
+      id:           a.id,
+      name:         a.name,
+      openTickets:  openMap.get(a.id) ?? 0,
+      closedToday:  closedTodayMap.get(a.id) ?? 0,
+      totalTickets: totalMap.get(a.id) ?? 0,
     }))
     .sort((a, b) => b.openTickets - a.openTickets);
 
@@ -368,6 +401,14 @@ router.get("/stats", async (_req, res) => {
     ratedCount: ratingAgg._count.rating,
     dailyCounts,
     agentWorkload,
+    clientRecentTickets: clientCounts.map((t) => ({
+      ticketId:   t.ticketId,
+      title:      t.title,
+      status:     t.status,
+      updatedAt:  t.updatedAt.toISOString(),
+      clientId:   t.hrmsClientId!,
+      clientName: t.hrmsClientName ?? t.hrmsClientId!,
+    })),
     recentActivity: recentTickets.map((t) => ({
       ticketId:   t.ticketId,
       title:      t.title,
@@ -375,6 +416,8 @@ router.get("/stats", async (_req, res) => {
       updatedAt:  t.updatedAt.toISOString(),
       assignedTo: t.assignedTo?.name ?? null,
     })),
+    statusBreakdown:   statusBreakdown.map((r) => ({ status: r.status, count: r._count._all })),
+    priorityBreakdown: priorityBreakdown.map((r) => ({ priority: r.priority, count: r._count._all })),
   });
 });
 
@@ -467,6 +510,32 @@ router.patch("/:id/type", async (req: Request<{ id: string }>, res: Response) =>
   const updated = await prisma.ticket.update({
     where:  { ticketId: req.params.id },
     data:   { type: parsed.data.type },
+    select: TICKET_SELECT,
+  });
+
+  res.json(updated);
+});
+
+// PATCH /api/tickets/:id/priority — update the priority of a ticket
+router.patch("/:id/priority", async (req: Request<{ id: string }>, res: Response) => {
+  const parsed = updatePrioritySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ fieldErrors: parsed.error.flatten().fieldErrors });
+    return;
+  }
+
+  const ticket = await prisma.ticket.findUnique({
+    where:  { ticketId: req.params.id },
+    select: { id: true },
+  });
+  if (!ticket) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+
+  const updated = await prisma.ticket.update({
+    where:  { ticketId: req.params.id },
+    data:   { priority: parsed.data.priority },
     select: TICKET_SELECT,
   });
 

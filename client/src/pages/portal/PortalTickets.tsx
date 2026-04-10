@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -100,8 +100,8 @@ function formatDate(iso: string): string {
 
 function ListView({ tickets }: { tickets: PortalTicket[] }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <table className="w-full table-fixed text-sm">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+      <table className="w-full min-w-[600px] table-fixed text-sm">
         <colgroup>
           <col className="w-[10%]" />  {/* ID */}
           <col className="w-[38%]" />  {/* Subject */}
@@ -189,8 +189,8 @@ function GridView({ tickets }: { tickets: PortalTicket[] }) {
 
 function SkeletonRows() {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <table className="w-full table-fixed text-sm">
+    <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+      <table className="w-full min-w-[600px] table-fixed text-sm">
         <thead>
           <tr className="border-b border-gray-100 bg-gray-50/60">
             {["ID", "Subject", "Status", "Created", "Last Updated"].map((h) => (
@@ -428,6 +428,8 @@ function SubmitTicketModal({ onClose }: { onClose: () => void }) {
 const PAGE_SIZE = 10;
 
 export default function PortalTickets() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>("");
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("");
   const [search,         setSearch]         = useState("");
@@ -436,7 +438,15 @@ export default function PortalTickets() {
   const [sortOrder,      setSortOrder]      = useState<SortOrder>("desc");
   const [viewMode,       setViewMode]       = useState<ViewMode>("list");
   const [page,           setPage]           = useState(1);
-  const [showForm,       setShowForm]       = useState(false);
+  const [showForm,       setShowForm]       = useState(() => searchParams.get("new") === "1");
+
+  // Clean up ?new=1 from URL after reading it on mount
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      navigate("/portal/tickets", { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data, isLoading, isError } = useQuery<TicketsResponse>({
     queryKey: ["portal-tickets", statusFilter, priorityFilter, search, dateFrom, dateTo, sortOrder, page],
@@ -497,9 +507,9 @@ export default function PortalTickets() {
       {/* ── Filter bar ── */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5 space-y-3">
         {/* Row 1: Search + sort + view toggle */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
-          <div className="relative flex-1 min-w-48">
+          <div className="relative flex-1 min-w-0 w-full sm:min-w-48 sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             <input
               type="text"
@@ -510,26 +520,29 @@ export default function PortalTickets() {
             />
           </div>
 
-          {/* Date from */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-400 whitespace-nowrap">From</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-              className="text-sm border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
-          </div>
+          {/* Date range wrapper */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Date from */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400 whitespace-nowrap">From</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                className="text-sm border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
 
-          {/* Date to */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-gray-400 whitespace-nowrap">To</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-              className="text-sm border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400"
-            />
+            {/* Date to */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400 whitespace-nowrap">To</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                className="text-sm border border-gray-200 rounded-lg px-2.5 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
           </div>
 
           {/* Sort */}
@@ -640,7 +653,7 @@ export default function PortalTickets() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
-              <p className="text-sm text-gray-400">
+              <p className="text-xs sm:text-sm text-gray-400">
                 Page {page} of {totalPages} · {data?.total} tickets
               </p>
               <div className="flex gap-2">
@@ -648,7 +661,7 @@ export default function PortalTickets() {
                   type="button"
                   disabled={page <= 1}
                   onClick={() => setPage((p) => p - 1)}
-                  className="text-sm border border-gray-200 rounded-lg px-3.5 py-2 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="text-sm border border-gray-200 rounded-lg px-3.5 py-2.5 sm:py-2 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   ← Prev
                 </button>
@@ -656,7 +669,7 @@ export default function PortalTickets() {
                   type="button"
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => p + 1)}
-                  className="text-sm border border-gray-200 rounded-lg px-3.5 py-2 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="text-sm border border-gray-200 rounded-lg px-3.5 py-2.5 sm:py-2 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   Next →
                 </button>

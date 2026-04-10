@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Inbox, Users, BarChart2 } from "lucide-react";
+import { LayoutDashboard, Inbox, Users, BarChart2, Building2 } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 import { ROLES, type UserRole } from "@tms/core";
 
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
 
 const ADMIN_ITEMS = [
   { path: "/users",     label: "Users",     icon: Users,     exact: false },
+  { path: "/clients",   label: "Clients",   icon: Building2, exact: false },
   { path: "/analytics", label: "Analytics", icon: BarChart2, exact: false },
 ];
 

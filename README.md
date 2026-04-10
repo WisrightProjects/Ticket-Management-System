@@ -1,57 +1,21 @@
-# Ticket Management System
+# Right Tracker — WisRight Support Tool
 
-A centralized ticket management system for tracking support requests, bugs, and tasks across teams.
+An internal ticket management system and customer portal built for WisRight. Agents and admins manage support tickets through a full-featured dashboard; customers submit and track tickets via a branded public portal.
 
-![React](https://img.shields.io/badge/React-19-blue?logo=react)
-![Express.js](https://img.shields.io/badge/Express.js-5-black?logo=express)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue?logo=postgresql)
-![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma)
-![E2E Tests](https://img.shields.io/badge/Playwright-158_tests-green?logo=playwright)
-![Unit Tests](https://img.shields.io/badge/Vitest-128_tests-green?logo=vitest)
-![License](https://img.shields.io/badge/License-Proprietary-red)
+**Repository:** https://github.com/Yuvaraj-3007/Ticket-Management-System
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Key Features](#key-features)
 - [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
 - [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [Demo Credentials](#demo-credentials)
-- [API Endpoints](#api-endpoints)
-- [Database Schema](#database-schema)
-- [Security](#security)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Environment Variables](#environment-variables)
+- [Features](#features)
 - [Testing](#testing)
-- [Git Hooks (Lefthook)](#git-hooks-lefthook)
-- [Development](#development)
-- [License](#license)
-
----
-
-## Overview
-
-Ticket Management System is a full-stack application designed to replace fragmented ticket intake (email, chat, spreadsheets) with a single, centralized platform. Built with a React frontend and Express.js backend, it provides role-based access control, real-time dashboard metrics, and a complete audit trail for every ticket change.
-
----
-
-## Key Features
-
-- **Authentication** — Email/password login with database-backed sessions (sign-up disabled, admin creates users)
-- **Role-Based Access Control** — Admin and Agent roles with route-level protection
-- **User Management** — Admin can create, edit, deactivate, and reactivate team members
-- **Ticket Intake** — Auto-create tickets from inbound email via webhook (`POST /api/webhooks/email`) with auto-generated IDs (TKT-0001 format)
-- **Ticket List** — Paginated, sortable, and filterable ticket table with search
-- **Ticket Detail** — Inline editing of status, category, and assignee directly on the detail page
-- **Reply Thread** — Comments on tickets with Agent/Customer sender type distinction
-- **AI-powered reply polishing** — Kimi/Moonshot API rewrites agent replies for clarity and professionalism
-- **AI auto-resolution** — new tickets are assigned to an AI agent (`ai@system.internal`) and automatically resolved via a pg-boss worker if the knowledge base covers the issue
-- **Dashboard metrics** — live stat cards (total, open, AI-resolved %, avg resolution time) and a 30-day bar chart via `GET /api/tickets/stats`
-- **Security** — Helmet headers, CORS restrictions, rate limiting, Zod input validation, XML-delimited prompt injection mitigations, `</draft>` stripping in polish, 6 000-char thread cap in summarize
-- **Shared Schemas** — `@tms/core` workspace package shares Zod schemas and constants between client and server
+- [Scripts](#scripts)
 
 ---
 
@@ -59,111 +23,78 @@ Ticket Management System is a full-stack application designed to replace fragmen
 
 | Layer | Technology |
 |:------|:-----------|
-| **Runtime** | Bun |
-| **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS 4, shadcn/ui (Base UI) |
-| **State / Data** | TanStack Query v5 |
-| **Routing** | React Router DOM 7 |
-| **Forms** | React Hook Form 7 + Zod 4 |
-| **Backend** | Express.js 5, TypeScript |
-| **Database** | PostgreSQL 17 |
-| **ORM** | Prisma 7 with `@prisma/adapter-pg` |
-| **Auth** | Better Auth 1.5 (email/password, database sessions) |
-| **Security** | Helmet, express-rate-limit, CORS |
-| **Tables** | TanStack Table v8 (manualSorting + manualPagination) |
-| **Charts** | Recharts — bar chart on Dashboard |
-| **Shared** | `@tms/core` workspace package (Zod schemas, ROLES/ticket constants) |
-| **Unit Tests** | Vitest 4 + Testing Library |
-| **E2E Tests** | Playwright |
-
----
-
-## Architecture
-
-```
-Browser (React SPA)
-    |
-    |-- Vite Dev Server (port 5173)
-    |       |
-    |       |-- /api/* proxy -->  Express.js (port 4000)
-    |                                  |
-    |                                  |-- Better Auth (sessions)
-    |                                  |-- Prisma ORM
-    |                                  |       |
-    |                                  |       |-- PostgreSQL (port 5433)
-    |                                  |
-    |                                  |-- Middleware
-    |                                       |-- requireAuth
-    |                                       |-- requireAdmin
-    |                                       |-- Helmet + Rate Limiting
-
-packages/core (@tms/core)
-    |-- Shared Zod schemas (user + ticket)
-    |-- ROLES, TICKET_TYPE, PRIORITY, STATUS constants
-    |-- TypeScript types
-    (imported by both client and server)
-```
+| Runtime | Bun 1.3.11 |
+| Frontend | React 19, TypeScript 5.9, Vite 8 |
+| Styling | Tailwind CSS 4, shadcn/ui |
+| Data fetching | TanStack Query v5 |
+| Tables | TanStack Table v8 |
+| Forms | React Hook Form 7 + Zod 4 |
+| Routing | React Router 7 |
+| Charts | Recharts |
+| HTTP client | Axios |
+| Backend | Express.js 5, TypeScript |
+| Auth | Better Auth 1.5 |
+| ORM | Prisma 7 with @prisma/adapter-pg |
+| Database | PostgreSQL 17 |
+| Shared package | @tms/core (Zod schemas, role/status constants) |
+| AI | Kimi (Moonshot AI) via Vercel AI SDK |
+| Job queue | pg-boss v12 |
+| Monitoring | Sentry (@sentry/node) |
+| Tests (unit) | Vitest |
+| Tests (e2e) | Playwright |
 
 ---
 
 ## Project Structure
 
 ```
-Ticket-Management-System/
-├── client/                        # React frontend
+.
+├── client/                  # React frontend (Vite, port 5173)
+│   └── src/
+│       ├── components/      # Reusable UI components (EnumSelect, TicketReplies, etc.)
+│       ├── pages/           # Route-level page components
+│       ├── hooks/           # Custom React hooks
+│       └── lib/             # Axios instance, query client, utilities
+├── server/                  # Express backend (Bun, port 4000)
 │   ├── src/
-│   │   ├── components/            # Navbar, TicketDetail, TicketReplies, EnumSelect, ui/ (textarea, ...)
-│   │   │   └── __tests__/         # TicketDetail.test.tsx, TicketReplies.test.tsx
-│   │   ├── pages/                 # Login, Dashboard, Users, Tickets, TicketDetailPage
-│   │   │   └── __tests__/         # Vitest unit tests (128 tests)
-│   │   └── lib/                   # Auth client, ticket-badges, utilities
-│   ├── vite.config.ts             # Vite + Vitest config
-│   └── package.json
-├── server/                        # Express.js backend
-│   ├── src/
-│   │   ├── routes/                # users.ts, tickets.ts, webhooks.ts
-│   │   ├── lib/                   # Auth config, Prisma client, boss.ts (pg-boss singleton)
-│   │   ├── middleware/            # Auth & admin middleware
-│   │   └── workers/               # classify.ts, auto-resolve.ts (pg-boss workers)
-│   ├── prisma/
-│   │   ├── schema.prisma          # Database schema
-│   │   ├── migrations/            # SQL migrations
-│   │   └── seed.ts                # Seeds admin + AI agent (ai@system.internal)
-│   └── knowledge-base.md          # Q&A entries used by auto-resolve AI worker
-│   ├── .env.example
-│   └── package.json
+│   │   ├── routes/          # Express route handlers
+│   │   ├── workers/         # pg-boss job workers (classify, auto-resolve)
+│   │   ├── lib/             # Auth, email, AI, CAPTCHA utilities
+│   │   └── generated/       # Prisma client output (server/src/generated/prisma/)
+│   └── prisma/
+│       ├── schema.prisma
+│       ├── migrations/
+│       └── seed.ts
 ├── packages/
-│   └── core/                      # @tms/core shared package
-│       ├── src/
-│       │   ├── index.ts           # Re-exports everything
-│       │   └── schemas/
-│       │       ├── user.ts        # ROLES, user schemas/types
-│       │       └── ticket.ts      # ticket constants, schemas, types
-│       └── SCHEMAS.md             # How to add new schemas
-├── tests/                         # Playwright e2e tests
-│   ├── auth.spec.ts               # Authentication tests (46 tests)
-│   ├── users.spec.ts              # User management tests (9 tests)
-│   ├── webhooks.spec.ts           # Webhook intake tests (28 tests)
-│   ├── tickets.spec.ts            # Tickets list/API tests (21 tests)
-│   ├── ticket-detail.spec.ts      # Ticket detail page tests (69 tests)
-│   ├── example.spec.ts            # Smoke test (1 test)
-│   ├── global-setup.ts            # Test DB migration & seed
-│   └── global-teardown.ts         # Test DB cleanup
-├── CLAUDE.md                      # Coding guidelines for AI & devs
-├── playwright.config.ts
-├── implementation-plan.md
-├── tech-stack.md
-└── package.json
+│   └── core/                # Shared @tms/core workspace package
+│       └── src/             # Zod schemas, ROLES, STATUS constants
+├── tests/                   # Playwright e2e test suites
+│   ├── auth.spec.ts
+│   ├── users.spec.ts
+│   ├── tickets.spec.ts
+│   ├── ticket-detail.spec.ts
+│   ├── dashboard.spec.ts
+│   ├── portal.spec.ts
+│   ├── webhooks.spec.ts
+│   ├── frontend-features.spec.ts
+│   ├── global-setup.ts
+│   └── global-teardown.ts
+├── CLAUDE.md                # Coding guidelines
+├── package.json             # Workspace root
+└── playwright.config.ts
 ```
 
 ---
 
-## Quick Start
+## Prerequisites
 
-### Prerequisites
+- **Bun** 1.3 or later — https://bun.sh
+- **PostgreSQL** 17 running on port **5433**
+- **Node.js** 20 or later (required by some tooling)
 
-- [Bun](https://bun.sh/) — runtime and package manager
-- [PostgreSQL 17](https://www.postgresql.org/) — running on port 5433
-- [Node.js](https://nodejs.org/) — required for Playwright
+---
+
+## Setup
 
 ### 1. Clone the repository
 
@@ -178,150 +109,147 @@ cd Ticket-Management-System
 bun install
 ```
 
-### 3. Configure environment
+This installs dependencies for all workspaces (`client/`, `server/`, `packages/core/`) in one pass.
 
-```bash
-cp server/.env.example server/.env
-```
+### 3. Configure environment variables
 
-Edit `server/.env`:
+Create `server/.env` and populate it with the values described in the [Environment Variables](#environment-variables) section. At minimum, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and `CLIENT_URL` are required to start the server.
 
-```env
-PORT=4000
-DATABASE_URL=postgresql://postgres:your_password@localhost:5433/ticket_management
-BETTER_AUTH_SECRET=your-secret-key-min-32-chars
-BETTER_AUTH_URL=http://localhost:4000
-CLIENT_URL=http://localhost:5173
-NODE_ENV=development
-TEST_BACKEND_URL=http://localhost:5001
-WEBHOOK_SECRET=
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=YourPassword@123
-MOONSHOT_API_KEY=your-moonshot-api-key
-```
-
-### 4. Set up the database
+### 4. Run database migrations
 
 ```bash
 cd server
 bunx prisma migrate deploy
+```
+
+### 5. Seed the database
+
+```bash
+# from server/
 bun run prisma/seed.ts
 ```
 
-### 5. Start development servers
+This creates the default admin account and required reference data.
+
+**Default admin credentials:**
+
+| Email | Password |
+|:------|:---------|
+| `admin@wisright.com` | `Test@123` |
+
+> Sign-up is disabled for internal users. Only admins can create new accounts via the User Management page.
+
+### 6. Start the backend
 
 ```bash
-# Terminal 1 — Backend (port 4000)
-cd server && bun run src/index.ts
-
-# Terminal 2 — Frontend (port 5173)
-cd client && bun run dev
+# from server/
+bun run src/index.ts
 ```
 
-Open [http://localhost:5173](http://localhost:5173) to access the application.
+The API server starts on **http://localhost:4000**.
+
+### 7. Start the frontend
+
+```bash
+# from client/
+bun run dev
+```
+
+The dev server starts on **http://localhost:5173**.
 
 ---
 
-## Demo Credentials
+## Environment Variables
 
-| Role | Email | Password |
-|:-----|:------|:---------|
-| **Admin** | `admin@wisright.com` | `Test@123` |
+All variables go in `server/.env`. Variables marked **required** must be present for the server to start correctly.
 
-> Sign-up is disabled. Only admins can create new users via the User Management page.
-
----
-
-## API Endpoints
-
-### Authentication
-
-| Method | Endpoint | Description |
-|:-------|:---------|:------------|
-| `POST` | `/api/auth/sign-in/email` | Login with email/password |
-| `POST` | `/api/auth/sign-out` | Logout and destroy session |
-| `GET` | `/api/auth/get-session` | Get current session info |
-
-### Users (Admin only)
-
-| Method | Endpoint | Description |
-|:-------|:---------|:------------|
-| `GET` | `/api/users` | List all users |
-| `POST` | `/api/users` | Create a new user |
-| `PUT` | `/api/users/:id` | Update user name, email, role, password |
-| `PATCH` | `/api/users/:id/status` | Activate or deactivate a user |
-
-### Tickets
-
-| Method | Endpoint | Description |
-|:-------|:---------|:------------|
-| `GET` | `/api/tickets` | List tickets (sort, filter, paginate via query params) |
-| `GET` | `/api/tickets/stats` | Dashboard statistics: total, open, aiResolved, aiResolvedPercent, avgResolutionTimeMs, dailyCounts (30-day array) |
-| `GET` | `/api/tickets/:id` | Get a single ticket by ticketId (e.g. `TKT-0001`) |
-| `GET` | `/api/tickets/assignable-users` | Active users available for assignment |
-| `PATCH` | `/api/tickets/:id/assignee` | Assign or unassign a ticket |
-| `PATCH` | `/api/tickets/:id/status` | Update ticket status |
-| `PATCH` | `/api/tickets/:id/type` | Update ticket category/type |
-| `GET` | `/api/tickets/:id/comments` | List all comments for a ticket |
-| `POST` | `/api/tickets/:id/comments` | Add a comment to a ticket |
-| `POST` | `/api/tickets/:id/polish` | AI-polish a draft reply (Kimi/Moonshot API, rate-limited) |
-
-### Webhooks
-
-| Method | Endpoint | Description |
-|:-------|:---------|:------------|
-| `POST` | `/api/webhooks/email` | Create a ticket from an inbound email payload |
-
-### System
-
-| Method | Endpoint | Description |
-|:-------|:---------|:------------|
-| `GET` | `/api/health` | Health check |
+| Variable | Description | Required |
+|:---------|:------------|:--------:|
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `BETTER_AUTH_SECRET` | Session signing secret | Yes |
+| `BETTER_AUTH_URL` | Backend base URL (e.g. `http://localhost:4000`) | Yes |
+| `CLIENT_URL` | Frontend origin for CORS (e.g. `http://localhost:5173`) | Yes |
+| `CAPTCHA_SECRET` | CAPTCHA token signing key (falls back to `BETTER_AUTH_SECRET`) | No |
+| `WEBHOOK_SECRET` | Guards `POST /api/webhooks/*` — required in production | Prod |
+| `PORT` | HTTP listen port (default: `4000`) | No |
+| `MOONSHOT_API_KEY` | Kimi AI — ticket classify, polish, summarize, auto-resolve | No |
+| `SENTRY_DSN` | Sentry error reporting DSN | No |
+| `GMAIL_USER` | Outbound SMTP address (e.g. `wisright.support@gmail.com`) | No |
+| `GMAIL_APP_PASSWORD` | Gmail App Password for SMTP | No |
+| `GOOGLE_CLIENT_ID` | Google OAuth2 client ID (Gmail API inbound) | No |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret | No |
+| `GOOGLE_REFRESH_TOKEN` | OAuth2 refresh token for Gmail API | No |
+| `GMAIL_PUBSUB_TOPIC` | GCP Pub/Sub topic for Gmail push notifications | No |
+| `GMAIL_PUBSUB_SECRET` | GCP Pub/Sub push verification secret | No |
+| `HRMS_API_URL` | HRMS-POC base URL (customer/employee data source) | No |
+| `HRMS_API_KEY` | HRMS-POC API key | No |
 
 ---
 
-## Database Schema
+## Features
 
-### Models
+### Authentication and User Management
 
-| Model | Description |
-|:------|:------------|
-| **User** | Email, name, role (ADMIN/AGENT), active status |
-| **Account** | Better Auth credential provider (hashed password) |
-| **Session** | Database-backed auth sessions (7-day expiry, daily refresh) |
-| **Ticket** | Title, description, type, priority, status, assignee, project |
-| **Comment** | Threaded comments on tickets with author |
-| **Attachment** | File attachments linked to tickets |
-| **TicketHistory** | Audit trail logging every ticket change |
+- Email/password login via Better Auth (self sign-up is disabled for internal users)
+- Role-based access control: **ADMIN**, **AGENT**, **CUSTOMER**
+- Secure session cookies: `httpOnly`, `SameSite=Lax`
+- Admin user list with name search and 10-per-page pagination
+- Create, edit, and delete users; deleting an agent cascades ticket reassignment to the acting admin
+- Activate and deactivate accounts
+- Show/hide password toggle in the edit dialog
 
-### Enums
+### Agent Performance Page (`/users/:id`)
 
-| Enum | Values |
-|:-----|:-------|
-| **Role** | `ADMIN` `AGENT` |
-| **TicketType** | `BUG` `REQUIREMENT` `TASK` `SUPPORT` |
-| **Priority** | `LOW` `MEDIUM` `HIGH` `CRITICAL` |
-| **Status** | `OPEN` `IN_PROGRESS` `RESOLVED` `CLOSED` |
-| **CommentSenderType** | `AGENT` `CUSTOMER` |
+- KPI cards: Total Assigned, Total Closed, Average Resolution Time, Average Rating
+- Recharts visualisations: tickets by Status, Priority, Type, Project, and 30-day monthly trend
+- Recent Tickets table showing the last 30 tickets
+- CSV export and print report (print-safe CSS hides navigation chrome)
 
----
+### Ticket Management
 
-## Security
+- Sortable, filterable, paginated ticket list
+- Six-stage status workflow: `UN_ASSIGNED` → `OPEN_NOT_STARTED` → `OPEN_IN_PROGRESS` → `OPEN_QA` → `OPEN_DONE` → `CLOSED`
+- Inline editing for status, type, priority, and assignee
+- AI features (requires `MOONSHOT_API_KEY`):
+  - Reply polish — Kimi rewrites a draft reply for clarity and professionalism
+  - Ticket summarisation — Kimi produces a concise summary of the full thread
+  - Auto-classify worker — sets type and priority on newly created tickets
+  - Auto-resolve worker — KB lookup; resolves to `OPEN_DONE` with an AI-generated reply, or falls back to `OPEN_NOT_STARTED`
+- Threaded comments with `AGENT` / `CUSTOMER` sender types (derived server-side; clients cannot forge sender)
+- Image attachments: up to 5 files, 1 MB each, JPEG/PNG/GIF/WEBP
 
-A security audit was completed on 2026-04-04. All identified issues (Critical, High, Medium, Low) were resolved. Key measures in place:
+### Customer Portal (`/portal/:slug`)
 
-| Measure | Detail |
-|:--------|:-------|
-| **Per-user AI rate limiting** | AI polish endpoint capped at 10 requests/minute per user |
-| **Server-side senderType** | `senderType` is derived from session on the server — clients cannot forge the sender |
-| **Session invalidation on password reset** | All existing sessions are destroyed when a user's password is changed |
-| **Prompt injection mitigation** | XML delimiters (`<system>`, `<context>`, `<draft>`) isolate user-supplied content in auto-resolve, polish, and summarize prompts |
-| **`</draft>` stripping in polish** | Any `</draft>` tag injected by the client is stripped before the AI call |
-| **6 000-char thread cap in summarize** | Comment thread is truncated to 6 000 chars to prevent context-stuffing attacks |
-| **MOONSHOT_API_KEY guard** | Server refuses to start in production if `MOONSHOT_API_KEY` is missing |
-| **Safe error logging** | SDK/AI errors are sanitised before logging — no internal stack traces leaked to clients |
-| **Helmet + CORS** | Security headers and origin restrictions on every response |
-| **Input validation** | Zod schemas validate all request bodies on every endpoint |
+- Branded portal per company slug (e.g. `/portal/skanska-ab`)
+- Public ticket submission form with server-side CAPTCHA
+  - SVG image CAPTCHA — no plaintext code exposed to the client
+  - 3-part encrypted token (`ts.encryptedCode.hmac`), single-use, 10-minute expiry
+- Customer sign-up and sign-in
+- My Tickets: list and grid view, status filter, 10-per-page pagination
+- Ticket detail with full reply thread (sortable oldest/newest)
+- 1–5 star rating for closed tickets
+
+### Email Integration
+
+- **Inbound:** Google Pub/Sub push notification → Gmail API fetches unread messages → creates a new ticket or appends a reply to an existing thread
+- **Outbound:** Gmail SMTP via nodemailer — auto-replies to customers when an agent posts a comment
+- **Reply threading:** detects a `Ticket: TKT-XXXX` footer in the email body to link replies to the correct ticket
+
+### Analytics Dashboard
+
+- Stat cards: total tickets, open tickets, AI-resolved count and percentage, average resolution time
+- 30-day daily ticket volume bar chart (Recharts)
+
+### Security
+
+- `helmet()` headers and CORS locked to `CLIENT_URL`
+- Rate limiting on general, ticket-submit, and CAPTCHA endpoints
+- Webhook secret enforcement in non-test environments
+- `isActive` guard on every authenticated route
+- Request body size limit: 50 KB
+- Per-user AI rate limit: 10 requests per minute
+- Prompt injection mitigation: XML delimiters isolate user-supplied content in AI prompts; `</draft>` tags are stripped before polish calls; comment threads are capped at 6,000 characters in summarize
+- Sentry error reporting with sanitised error logging (no internal stack traces leaked to clients)
 
 ---
 
@@ -329,149 +257,74 @@ A security audit was completed on 2026-04-04. All identified issues (Critical, H
 
 ### Unit Tests (Vitest)
 
+Run from `client/`:
+
 ```bash
-cd client
-
-# Run once
-npx vitest run
-
-# Watch mode
-bun run test:components:watch
+bun run test:components
 ```
 
-| Suite | Tests |
-|:------|:------|
-| TicketDetail component | 24 |
-| TicketReplies component | 27 |
-| Users page rendering | 2 |
-| Create user form | 10 |
-| TicketDetailPage (pages) | 46 |
-| Tickets page | 24 |
-| **Total** | **128** |
+133 component and utility tests covering UI logic, form validation, and helper functions.
 
-### E2E Tests (Playwright)
+### End-to-End Tests (Playwright)
+
+Run from the repo root:
 
 ```bash
-# Run all tests headless
-npx playwright test
-
-# Interactive UI
-npx playwright test --ui
-
-# Specific file
-npx playwright test tests/ticket-detail.spec.ts
-
-# View HTML report
-npx playwright show-report tests/playwright-report
+bunx playwright test
 ```
 
-#### Test Infrastructure
+Playwright uses a separate test database (`ticket_management_test`). Global setup runs migrations and seeds the DB; teardown truncates all tables between runs.
 
-- **Test database:** `ticket_management_test` (isolated from dev)
-- **Test servers:** Backend on port 5001, Frontend on port 5175
-- **Setup:** Migrations + admin seed before each run
-- **Teardown:** All tables truncated after tests complete
-- **`TEST_BACKEND_URL`** in `server/.env` must point to port 5001 for e2e tests
+- Test backend: port **5001**
+- Test frontend: port **5174**
 
-#### E2E Coverage
+| Suite | Coverage |
+|:------|:---------|
+| `auth.spec.ts` | Login, logout, session handling, CAPTCHA |
+| `users.spec.ts` | User CRUD, pagination, search, role management |
+| `tickets.spec.ts` | Ticket list, filters, sorting, creation |
+| `ticket-detail.spec.ts` | Ticket detail view, replies, status transitions |
+| `dashboard.spec.ts` | Analytics cards and charts |
+| `portal.spec.ts` | Customer portal submit, sign-up, My Tickets, rating |
+| `webhooks.spec.ts` | Inbound webhook auth and ticket creation |
+| `frontend-features.spec.ts` | Cross-cutting UI interactions |
 
-> E2E tests cover only what cannot be tested with unit tests: real API calls, database persistence, browser navigation, and full user flows. Component rendering and interaction logic is covered by the 128 unit tests.
+To run a single suite:
 
-| Suite | Tests | Coverage |
-|:------|:------|:---------|
-| Login rendering | 4 | Form elements, field types, initial state |
-| Successful login | 2 | Redirect, loading state |
-| Client-side validation | 6 | Empty fields, invalid email, short password |
-| Server-side errors | 4 | Wrong password, unknown email, error recovery |
-| Session persistence | 2 | Reload, direct navigation |
-| Logout | 5 | Redirect, form display, cookie cleanup |
-| Route protection (guest) | 3 | Unauthenticated redirects |
-| Route protection (auth) | 1 | Authenticated redirect from /login |
-| Role-based access | 3 | Admin /users access, nav links |
-| Navbar identity | 1 | User name display |
-| Edge cases & security | 12 | SQL injection, XSS, long inputs, signup disabled |
-| Auth API | 3 | Direct endpoint validation |
-| Smoke test | 1 | App loads |
-| User management | 5 | Real DB: create, update, deactivate, reactivate |
-| Webhook email intake | 28 | Create ticket, field mapping, validation, auth |
-| Tickets list & API | 21 | Sort, filter, paginate, auth, field validation |
-| GET /api/tickets/:id API | 6 | 200/401/404, required fields |
-| Ticket detail — navigation | 5 | Auth redirect, URL nav, back button, list→detail, 404 |
-| GET assignable-users API | 3 | Auth, response shape |
-| PATCH assignee API | 6 | Assign, unassign, 400/404 cases |
-| Assign ticket — UI | 2 | Real PATCH: assign user, unassign |
-| PATCH status API | 5 | Update, invalid value, 404 |
-| PATCH type API | 5 | Update, invalid value, 404 |
-| Update status — UI | 2 | Real PATCH + persistence check |
-| Update category — UI | 2 | Real PATCH + persistence check |
-| GET comments API | 5 | Auth, empty array, fields shape |
-| POST comments API | 7 | Create, senderType, validation, 404 |
-| Replies — UI | 3 | Full post flow, count, Customer sender flow |
-| AI polish API | 4 | Auth, happy path, rate limit, validation |
-| **Total** | **158** | |
-
----
-
-## Git Hooks (Lefthook)
-
-Pre-commit and pre-push hooks are enforced via [Lefthook](https://github.com/evilmartians/lefthook) to catch issues before they reach GitHub.
-
-### On every `git commit` (runs in parallel)
-
-| Check | Command | Catches |
-|:------|:--------|:--------|
-| ESLint | `bun run lint` (client) | Lint errors, unused vars, React hooks violations |
-| TypeScript (client) | `tsc -b --noEmit` | Type errors in frontend |
-| TypeScript (server) | `tsc --noEmit` | Type errors in backend |
-
-### On every `git push` (runs in sequence)
-
-| Check | Command | Catches |
-|:------|:--------|:--------|
-| Unit tests | `npx vitest run` | Component/logic regressions |
-| E2E tests | `npx playwright test` | Full user-flow regressions |
-
-If any check fails the commit or push is blocked with a clear error message.
-
-To skip in an emergency (use rarely):
 ```bash
-git commit --no-verify
-git push --no-verify
+bunx playwright test tests/portal.spec.ts
 ```
 
-### Setup (already done — for new contributors)
+To open the interactive UI:
 
 ```bash
-bun install        # installs lefthook
-bunx lefthook install  # registers the git hooks
+bunx playwright test --ui
 ```
 
 ---
 
-## Development
+## Scripts
 
-### Implementation Progress
-
-| Phase | Description | Status |
-|:------|:------------|:-------|
-| 1 | Project Setup & Database | Complete |
-| 2 | Authentication | Complete |
-| 3 | User Management (Admin) | Complete |
-| 4 | Ticket CRUD | Complete (status, category, assignee editing done) |
-| 5 | Comments & History | Complete |
-| 6 | Dashboard | Complete (stat cards + 30-day bar chart via Recharts) |
-| 7 | AI Features | Complete (polish, summarize, classify, auto-resolve) |
-| 8 | Security Hardening | Complete |
-| 9 | Polish & Deployment | In Progress |
-
-See [implementation-plan.md](implementation-plan.md) for the detailed task breakdown.
-
-### Coding Guidelines
-
-See [CLAUDE.md](CLAUDE.md) for rules on role constants, schema usage, and other conventions enforced in this codebase.
+| Command | Run from | Description |
+|:--------|:---------|:------------|
+| `bun install` | root | Install all workspace dependencies |
+| `bun run src/index.ts` | `server/` | Start the backend server (port 4000) |
+| `bun run dev` | `client/` | Start the frontend dev server (port 5173) |
+| `bunx prisma migrate deploy` | `server/` | Apply pending database migrations |
+| `bun run prisma/seed.ts` | `server/` | Seed the database with initial data |
+| `bunx playwright test` | root | Run all Playwright e2e tests |
+| `bun run test:components` | `client/` | Run Vitest unit tests |
+| `bun run scripts/cleanup-spam.ts` | `server/` | Remove spam tickets by sender domain |
 
 ---
 
-## License
+## Ports Reference
 
-This project is proprietary and for internal use.
+| Service | Port |
+|:--------|:-----|
+| Backend (dev) | 4000 |
+| Frontend (dev) | 5173 |
+| Backend (test) | 5001 |
+| Frontend (test) | 5174 |
+| HRMS-POC (NestJS) | 3000 |
+| PostgreSQL | 5433 |

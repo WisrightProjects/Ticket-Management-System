@@ -9,6 +9,10 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 import {
   Ticket,
@@ -22,19 +26,26 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AgentWorkload {
-  id:          string;
-  name:        string;
-  openTickets: number;
-  closedToday: number;
+  id:           string;
+  name:         string;
+  openTickets:  number;
+  closedToday:  number;
+  totalTickets: number;
 }
 
-interface RecentActivity {
+interface ClientRecentTicket {
   ticketId:   string;
   title:      string;
   status:     string;
   updatedAt:  string;
-  assignedTo: string | null;
+  clientId:   string;
+  clientName: string;
 }
+
+
+
+interface StatusBreakdown { status: string; count: number; }
+interface PriorityBreakdown { priority: string; count: number; }
 
 interface DashboardStats {
   total:              number;
@@ -49,7 +60,9 @@ interface DashboardStats {
   ratedCount:         number;
   dailyCounts:        Array<{ date: string; count: number }>;
   agentWorkload:      AgentWorkload[];
-  recentActivity:     RecentActivity[];
+  clientRecentTickets: ClientRecentTicket[];
+  statusBreakdown:    StatusBreakdown[];
+  priorityBreakdown:  PriorityBreakdown[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -70,6 +83,29 @@ const STATUS_DOT: Record<string, string> = {
   OPEN_QA:          "bg-violet-500",
   OPEN_DONE:        "bg-teal-500",
   CLOSED:           "bg-green-500",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  UN_ASSIGNED:      "#94a3b8",
+  OPEN_NOT_STARTED: "#f59e0b",
+  OPEN_IN_PROGRESS: "#3b82f6",
+  OPEN_QA:          "#8b5cf6",
+  OPEN_DONE:        "#14b8a6",
+  CLOSED:           "#22c55e",
+};
+
+const PRIORITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
+const PRIORITY_LABELS_MAP: Record<string, string> = {
+  LOW:      "Low",
+  MEDIUM:   "Medium",
+  HIGH:     "High",
+  CRITICAL: "Critical",
+};
+const PRIORITY_COLORS: Record<string, string> = {
+  LOW:      "#94a3b8",
+  MEDIUM:   "#f59e0b",
+  HIGH:     "#f97316",
+  CRITICAL: "#ef4444",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -191,13 +227,13 @@ function Dashboard() {
 
       {/* ── KPI Cards ── */}
       {isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-8">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i}><CardContent className="p-5"><Skeleton className="h-16 w-full" /></CardContent></Card>
           ))}
         </div>
       ) : stats ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-8">
           <KpiCard
             label="Total Tickets"
             value={stats.total}
@@ -286,89 +322,34 @@ function Dashboard() {
 
       {/* ── Agent Workload + Recent Activity ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Agent Workload */}
+        {/* Client Recent Tickets */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Agent Workload</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="p-6 space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
-              </div>
-            ) : !stats?.agentWorkload.length ? (
-              <p className="px-6 py-4 text-sm text-muted-foreground">No agent data available.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left py-2.5 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Agent</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Open</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Closed Today</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {stats.agentWorkload.map((agent) => (
-                      <tr key={agent.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-4 font-medium text-gray-900">{agent.name}</td>
-                        <td className="py-3 px-4 text-right">
-                          {agent.openTickets > 0 ? (
-                            <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
-                              {agent.openTickets}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 text-xs">0</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {agent.closedToday > 0 ? (
-                            <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                              {agent.closedToday}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 text-xs">0</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+            <CardTitle className="text-base font-semibold">Client Tickets</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-6 space-y-3">
                 {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
-            ) : !stats?.recentActivity.length ? (
-              <p className="px-6 py-4 text-sm text-muted-foreground">No recent activity.</p>
+            ) : !stats?.clientRecentTickets?.length ? (
+              <p className="px-6 py-4 text-sm text-muted-foreground">No client tickets available.</p>
             ) : (
               <ul className="divide-y divide-gray-50">
-                {stats.recentActivity.map((item) => (
+                {stats.clientRecentTickets.map((item) => (
                   <li key={item.ticketId} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
-                    <span
-                      className={`mt-1.5 flex-shrink-0 w-2 h-2 rounded-full ${STATUS_DOT[item.status] ?? "bg-gray-400"}`}
-                    />
+                    <span className={`mt-1.5 flex-shrink-0 w-2 h-2 rounded-full ${STATUS_DOT[item.status] ?? "bg-gray-400"}`} />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs text-muted-foreground">{item.ticketId}</span>
                         <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
                           {STATUS_LABELS[item.status] ?? item.status}
                         </span>
                       </div>
                       <p className="text-sm text-gray-900 mt-0.5 truncate">{item.title}</p>
-                      {item.assignedTo && (
-                        <p className="text-xs text-muted-foreground mt-0.5">→ {item.assignedTo}</p>
-                      )}
+                      <p className="text-xs text-muted-foreground mt-0.5 font-medium" style={{ color: "var(--rt-accent)" }}>
+                        {item.clientName}
+                      </p>
                     </div>
                     <span className="flex-shrink-0 text-xs text-muted-foreground whitespace-nowrap">
                       {timeAgo(item.updatedAt)}
@@ -379,6 +360,75 @@ function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Status Distribution + Priority Breakdown */}
+        <div className="flex flex-col gap-6">
+          {/* Status Distribution */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Status Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-48 w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={stats?.statusBreakdown ?? []}
+                      dataKey="count"
+                      nameKey="status"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                    >
+                      {(stats?.statusBreakdown ?? []).map((entry) => (
+                        <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? "#94a3b8"} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v, name) => [v, STATUS_LABELS[String(name)] ?? name]} />
+                    <Legend formatter={(value) => STATUS_LABELS[value] ?? value} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Priority Breakdown */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold">Priority Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-40 w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart
+                    data={PRIORITY_ORDER.map((p) => ({
+                      priority: p,
+                      count: stats?.priorityBreakdown?.find((r) => r.priority === p)?.count ?? 0,
+                    }))}
+                    layout="vertical"
+                    margin={{ top: 0, right: 16, left: 8, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: "#6b7280" }} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="priority" tickFormatter={(v) => PRIORITY_LABELS_MAP[v] ?? v} tick={{ fontSize: 11, fill: "#6b7280" }} tickLine={false} axisLine={false} width={64} />
+                    <Tooltip formatter={(v) => [v, "Tickets"]} labelFormatter={(l) => PRIORITY_LABELS_MAP[l] ?? l} />
+                    <Bar dataKey="count" radius={[0, 3, 3, 0]}>
+                      {PRIORITY_ORDER.map((p) => (
+                        <Cell key={p} fill={PRIORITY_COLORS[p]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* ── Secondary Stats Row ── */}

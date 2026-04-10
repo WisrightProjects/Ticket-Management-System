@@ -47,14 +47,17 @@ function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
           className="flex items-center gap-2.5 flex-1 flex-shrink-0"
           style={{ textDecoration: "none" }}
         >
-          <img
-            src="/wisright-logo.png"
-            alt="Right Tracker"
-            style={{ height: "26px", width: "auto", objectFit: "contain", filter: "none" }}
-          />
-          <div style={{ width: "1px", height: "18px", background: "rgba(255,255,255,0.3)" }} />
-          <span className="text-sm font-bold tracking-tight" style={{ color: "#ffffff" }}>
-            Right <span style={{ color: "rgba(255,255,255,0.75)" }}>Tracker</span>
+          <div className="flex items-center justify-center rounded-lg px-5 py-1.5" style={{ background: "#ffffff" }}>
+            <img
+              src="/wisright-logo.png"
+              alt="Right Tracker"
+              style={{ height: "38px", width: "auto", objectFit: "contain" }}
+            />
+          </div>
+          <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.3)" }} />
+          <span className="text-sm font-bold" style={{ color: "#ffffff", whiteSpace: "nowrap" }}>
+            Right Tracker
+            <span className="hidden sm:inline font-normal text-xs ml-1.5" style={{ color: "rgba(255,255,255,0.7)" }}>— WisRight Support Tool</span>
           </span>
         </Link>
 

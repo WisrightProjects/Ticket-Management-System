@@ -45,7 +45,7 @@ router.get("/overview", async (_req, res) => {
 
     // Agent performance: tickets assigned + comments posted
     prisma.user.findMany({
-      where: { isActive: true, role: { in: ["ADMIN", "AGENT"] } },
+      where: { isActive: true, role: { in: [ROLES.ADMIN, ROLES.AGENT] } },
       select: {
         id:   true,
         name: true,

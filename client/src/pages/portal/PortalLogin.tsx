@@ -6,7 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { useQuery } from "@tanstack/react-query";
 import { useSession, signIn } from "@/lib/auth-client";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -267,6 +268,8 @@ export default function PortalLogin() {
   const { slug } = useParams<{ slug: string }>();
   const { data: session, isPending } = useSession();
   const location   = useLocation();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
   const navigate   = useNavigate();
   const fromSubmit = (location.state ?? {}) as LoginState;
 
@@ -322,24 +325,31 @@ export default function PortalLogin() {
           flexShrink:   0,
         }}
       >
-        <div className="flex items-center px-4 sm:px-6" style={{ height: "56px" }}>
+        <div className="flex items-center justify-between px-4 sm:px-6" style={{ height: "56px" }}>
           <div className="flex items-center gap-2.5">
-            <img
-              src="/wisright-logo.png"
-              alt="Right Tracker"
-              style={{ height: "26px", width: "auto", objectFit: "contain" }}
-            />
-            <div style={{ width: "1px", height: "18px", background: "rgba(255,255,255,0.3)" }} />
-            <span className="text-sm font-bold tracking-tight" style={{ color: "#ffffff" }}>
-              Right <span style={{ color: "rgba(255,255,255,0.75)" }}>Tracker</span>
-            </span>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium ml-1"
-              style={{ background: "rgba(0,0,0,0.2)", color: "rgba(255,255,255,0.85)" }}
-            >
-              Customer Portal
+            <div className="flex items-center justify-center rounded-lg px-5 py-1.5" style={{ background: "#ffffff" }}>
+              <img
+                src="/wisright-logo.png"
+                alt="Right Tracker"
+                style={{ height: "38px", width: "auto", objectFit: "contain" }}
+              />
+            </div>
+            <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.3)" }} />
+            <span className="text-sm font-bold" style={{ color: "#ffffff", whiteSpace: "nowrap" }}>
+              Right Tracker
+              <span className="hidden sm:inline font-normal text-xs ml-1.5" style={{ color: "rgba(255,255,255,0.7)" }}>— WisRight's Support Tool</span>
             </span>
           </div>
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-200"
+            title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            style={{ background: "rgba(0,0,0,0.12)", border: "1px solid rgba(255,255,255,0.2)", color: "#ffffff" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.22)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.12)"; }}
+          >
+            {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </header>
 
@@ -363,8 +373,17 @@ export default function PortalLogin() {
 
         <Card className="w-full max-w-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-center text-lg">
-              {activeTab === "signin" ? "Sign In" : "Create Account"}
+            {/* Logo inside white card */}
+            <div className="flex justify-center mb-4">
+              <div className="flex items-center justify-center rounded-xl px-4 py-2 sm:px-5 sm:py-3" style={{ background: "#ffffff", border: "1px solid #e5e7eb" }}>
+                <img src="/wisright-logo.png" alt="Right Tracker" style={{ height: "64px", width: "auto", objectFit: "contain" }} />
+              </div>
+            </div>
+            <CardTitle className="text-center text-xl">
+              Right Tracker{" "}
+              <span className="font-normal text-base text-muted-foreground">
+                {activeTab === "signin" ? "(Customer Login)" : "(Create Account)"}
+              </span>
             </CardTitle>
             {portalInfo?.customerName && (
               <p className="text-center text-sm mt-1" style={{ color: "var(--rt-text-3)" }}>
@@ -409,6 +428,15 @@ export default function PortalLogin() {
               ? <SignInForm defaultEmail={fromSubmit.email ?? ""} />
               : <SignUpForm defaultName={fromSubmit.name ?? ""} defaultEmail={fromSubmit.email ?? ""} clientId={storedClientId} />
             }
+
+            <div className="mt-5 pt-4 border-t border-gray-100 text-center">
+              <Link
+                to={`/portal/${slug}/submit`}
+                className="text-sm text-muted-foreground hover:underline"
+              >
+                Submit your First Ticket here →
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </main>
