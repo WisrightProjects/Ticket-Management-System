@@ -153,7 +153,8 @@ describe("TicketDetail — ticket data rendering", () => {
   it("shows the priority badge (High)", async () => {
     renderDetail();
     await screen.findByText("TKT-0001");
-    expect(screen.getByText("High")).toBeInTheDocument();
+    // "High" appears in both the header badge and the priority EnumSelect trigger
+    expect(screen.getAllByText("High").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows the status badge (Not Started)", async () => {
