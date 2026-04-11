@@ -1,4 +1,3 @@
-import { hashPassword } from "better-auth/crypto";
 import { ROLES } from "@tms/core";
 import prisma from "../src/lib/prisma.js";
 
@@ -16,7 +15,7 @@ async function main() {
   if (existingUser) {
     console.log("Admin user already exists, skipping seed.");
   } else {
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await Bun.password.hash(password);
     const userId = crypto.randomUUID();
 
     await prisma.user.create({
