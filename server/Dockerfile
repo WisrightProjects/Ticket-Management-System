@@ -36,7 +36,6 @@ ENV NODE_ENV=production
 
 # Copy installed node_modules (includes generated Prisma client)
 COPY --from=prisma /app/node_modules        ./node_modules
-COPY --from=prisma /app/server/node_modules ./server/node_modules 2>/dev/null || true
 
 # Copy source
 COPY packages/core ./packages/core
