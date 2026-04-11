@@ -1,5 +1,22 @@
+import { randomBytes, scrypt } from "node:crypto";
+import { promisify } from "node:util";
 import { ROLES } from "@tms/core";
 import prisma from "../src/lib/prisma.js";
+
+const scryptAsync = promisify(scrypt);
+
+// Matches better-auth's hashPassword format: "<hex-salt>:<hex-key>"
+// Uses the same scrypt params as better-auth (N=16384, r=16, p=1, dkLen=64)
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const key = (await scryptAsync(password.normalize("NFKC"), salt, 64, {
+    N: 16384,
+    r: 16,
+    p: 1,
+    maxmem: 128 * 16384 * 16 * 2,
+  })) as Buffer;
+  return `${salt}:${key.toString("hex")}`;
+}
 
 async function main() {
   const email = process.env.ADMIN_EMAIL;
@@ -15,7 +32,7 @@ async function main() {
   if (existingUser) {
     console.log("Admin user already exists, skipping seed.");
   } else {
-    const hashedPassword = await Bun.password.hash(password);
+    const hashedPassword = await hashPassword(password);
     const userId = crypto.randomUUID();
 
     await prisma.user.create({
