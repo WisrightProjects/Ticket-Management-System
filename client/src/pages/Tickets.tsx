@@ -557,9 +557,94 @@ function Tickets() {
           </div>
         )}
 
-        {/* ── Table ── */}
+        {/* ── Mobile card list (< md) ── */}
         {!isError && (
-          <div className="rounded-xl overflow-x-auto" style={{ border: "1px solid var(--rt-border)" }}>
+          <div className="flex flex-col gap-2 md:hidden">
+            {isLoading
+              ? Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-xl p-4 animate-pulse" style={{ background: "var(--rt-surface)", border: "1px solid var(--rt-border)" }}>
+                    <div className="h-3 rounded w-20 mb-3" style={{ background: "var(--rt-border)" }} />
+                    <div className="h-3 rounded w-48 mb-2" style={{ background: "var(--rt-border)" }} />
+                    <div className="h-3 rounded w-32" style={{ background: "var(--rt-border)" }} />
+                  </div>
+                ))
+              : tickets.length === 0
+              ? (
+                  <div className="py-16 text-center">
+                    <p className="text-sm" style={{ color: "var(--rt-text-3)" }}>
+                      {hasFilters ? "No tickets match your filters" : "No tickets yet"}
+                    </p>
+                    {hasFilters && (
+                      <button onClick={clearFilters} className="text-xs mt-2" style={{ color: "var(--rt-accent)" }}>
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
+                )
+              : tickets.map((ticket) => {
+                  const sc = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.CLOSED;
+                  const pc = PRIORITY_CONFIG[ticket.priority] ?? PRIORITY_CONFIG.LOW;
+                  return (
+                    <Link
+                      key={ticket.id}
+                      to={`/tickets/${ticket.ticketId}`}
+                      style={{ textDecoration: "none" }}
+                    >
+                      <div
+                        className="rounded-xl p-4 transition-colors"
+                        style={{ background: "var(--rt-surface)", border: "1px solid var(--rt-border)" }}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--rt-surface-2)")}
+                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--rt-surface)")}
+                      >
+                        {/* Row 1: ID + Status */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-mono text-xs font-semibold" style={{ color: "var(--rt-accent)" }}>
+                            {ticket.ticketId}
+                          </span>
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
+                            style={{ background: sc.bg, color: sc.text }}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: sc.dot }} />
+                            {STATUS_LABELS[ticket.status]}
+                          </span>
+                        </div>
+                        {/* Row 2: Subject */}
+                        <p className="text-sm font-semibold mb-2 line-clamp-1" style={{ color: "var(--rt-text-1)" }}>
+                          {ticket.title}
+                        </p>
+                        {/* Row 3: Sender */}
+                        <div className="flex items-center gap-1 mb-3">
+                          <p className="text-xs font-medium" style={{ color: "var(--rt-text-2)" }}>
+                            {ticket.senderName ?? ticket.createdBy?.name}
+                          </p>
+                          <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>·</span>
+                          <p className="text-xs truncate" style={{ color: "var(--rt-text-3)" }}>
+                            {ticket.senderEmail ?? ticket.project}
+                          </p>
+                        </div>
+                        {/* Row 4: Priority + Category + Date */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: pc.textLight }}>
+                            {PRIORITY_LABELS[ticket.priority]}
+                          </span>
+                          <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>
+                            {CATEGORY_LABELS[ticket.type]}
+                          </span>
+                          <span className="text-xs font-mono ml-auto" style={{ color: "var(--rt-text-3)" }}>
+                            {new Date(ticket.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+          </div>
+        )}
+
+        {/* ── Table (md+) ── */}
+        {!isError && (
+          <div className="hidden md:block rounded-xl overflow-x-auto" style={{ border: "1px solid var(--rt-border)" }}>
             <table className="w-full min-w-[700px]" style={{ borderCollapse: "collapse", background: "var(--rt-surface)" }}>
               <thead>
                 {table.getHeaderGroups().map((hg) => (
@@ -646,7 +731,7 @@ function Tickets() {
 
         {/* ── Pagination ── */}
         {!isLoading && !isError && (
-          <div className="flex items-center justify-between mt-5">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
             <div className="flex items-center gap-3">
               <span className="text-xs text-muted-foreground">Rows per page</span>
               <select

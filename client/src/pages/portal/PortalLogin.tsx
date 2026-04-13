@@ -364,13 +364,38 @@ export default function PortalLogin() {
       </div>
 
       {/* ── Right form panel ── */}
-      <div className="flex flex-col items-center justify-center px-4 py-10 sm:px-8 sm:py-12" style={{ flex:1, background:"#fff9f9" }}>
-        <div style={{ width:"100%", maxWidth:"420px" }}>
+      <div className="flex flex-col items-center justify-center" style={{ flex:1, background:"#fff9f9" }}>
 
-          {/* Mobile logo */}
-          <div className="flex justify-center mb-6 md:hidden">
-            <img src="/wisright-logo.png" alt="Right Tracker" style={{ height:"44px" }} />
+        {/* Mobile-only red branding header */}
+        <div
+          className="flex md:hidden flex-col items-center justify-center w-full"
+          style={{
+            background: "linear-gradient(160deg, #0a0000 0%, #660000 30%, #990000 65%, #cc0000 100%)",
+            padding: "32px 24px",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ position:"absolute", top:"-40px", right:"-40px", width:"180px", height:"180px", borderRadius:"50%", border:"2px solid rgba(202,138,4,0.25)", background:"transparent" }} />
+          <div style={{ position:"absolute", bottom:"-40px", left:"-30px", width:"160px", height:"160px", borderRadius:"50%", border:"2px solid rgba(202,138,4,0.20)", background:"transparent" }} />
+
+          <div style={{ position:"relative", zIndex:1, textAlign:"center" }}>
+            <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.95)", borderRadius:"16px", padding:"14px 24px", marginBottom:"20px", boxShadow:"0 8px 32px rgba(0,0,0,0.4), 0 0 0 2px rgba(202,138,4,0.4)" }}>
+              <img src="/wisright-logo.png" alt="Right Tracker" style={{ height:"40px", width:"auto" }} />
+            </div>
+            <h1 style={{ color:"#ffffff", fontSize:"22px", fontWeight:800, margin:"0 0 4px", letterSpacing:"-0.3px" }}>Right Tracker</h1>
+            <p style={{ color:"rgba(202,138,4,0.9)", fontSize:"11px", fontWeight:600, letterSpacing:"0.12em", margin:"0 0 10px", textTransform:"uppercase" }}>
+              Customer Portal
+            </p>
+            <div style={{ width:"48px", height:"3px", background:"linear-gradient(90deg, #ca8a04, #fbbf24)", borderRadius:"2px", margin:"0 auto" }} />
+            {portalInfo?.customerName && (
+              <p style={{ color:"rgba(255,255,255,0.85)", fontSize:"13px", fontWeight:600, marginTop:"12px" }}>{portalInfo.customerName}</p>
+            )}
           </div>
+        </div>
+
+        <div className="flex flex-col items-center justify-center px-4 py-10 sm:px-8 sm:py-12 w-full" style={{ flex:1 }}>
+        <div style={{ width:"100%", maxWidth:"420px" }}>
 
           {/* Success banner */}
           {fromSubmit.ticketId && (
@@ -387,9 +412,9 @@ export default function PortalLogin() {
             </div>
           )}
 
-          <div style={{ background:"#ffffff", borderRadius:"20px", padding:"40px", boxShadow:"0 4px 24px rgba(204,0,0,0.10), 0 1px 3px rgba(0,0,0,0.05)" }}>
+          <div style={{ background:"#ffffff", borderRadius:"20px", padding:"clamp(24px, 5vw, 40px)", boxShadow:"0 4px 24px rgba(204,0,0,0.10), 0 1px 3px rgba(0,0,0,0.05)" }}>
             {/* Gold top bar */}
-            <div style={{ height:"4px", background:"linear-gradient(90deg, #0a0000, #ca8a04, #fbbf24)", borderRadius:"4px 4px 0 0", margin:"-40px -40px 32px", borderTopLeftRadius:"20px", borderTopRightRadius:"20px" }} />
+            <div style={{ height:"4px", background:"linear-gradient(90deg, #0a0000, #990000, #cc0000)", margin:"calc(-1 * clamp(24px, 5vw, 40px)) calc(-1 * clamp(24px, 5vw, 40px)) 32px", borderTopLeftRadius:"20px", borderTopRightRadius:"20px" }} />
 
             <div style={{ marginBottom:"24px" }}>
               <h2 style={{ fontSize:"22px", fontWeight:800, color:"#1a0000", margin:"0 0 4px", letterSpacing:"-0.3px" }}>
@@ -444,6 +469,7 @@ export default function PortalLogin() {
           <p style={{ marginTop:"24px", textAlign:"center", fontSize:"12px", color:"#9ca3af" }}>
             Right Tracker · WisRight Customer Portal
           </p>
+        </div>
         </div>
       </div>
     </div>

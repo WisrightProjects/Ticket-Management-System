@@ -63,7 +63,7 @@ const STATUS_COLORS: Record<string, string> = {
   CLOSED:           "#22C55E",
 };
 
-const TYPE_COLORS = ["#F97316", "#3B82F6", "#8B5CF6", "#22C55E"];
+const TYPE_COLORS = ["#cc0000", "#3B82F6", "#8B5CF6", "#22C55E"];
 
 const OPEN_STATUSES = ["OPEN_NOT_STARTED", "OPEN_IN_PROGRESS", "OPEN_QA", "OPEN_DONE"];
 
@@ -92,11 +92,12 @@ function SummaryCard({
     <div
       className={`rounded-xl border p-5 ${
         accent
-          ? "bg-orange-500 text-white border-orange-500"
+          ? "text-white border-[#cc0000]"
           : "bg-card border-border"
       }`}
+      style={accent ? { background: "linear-gradient(135deg, #0a0000 0%, #990000 50%, #cc0000 100%)" } : {}}
     >
-      <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${accent ? "text-orange-100" : "text-muted-foreground"}`}>
+      <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${accent ? "text-red-100" : "text-muted-foreground"}`}>
         {label}
       </p>
       <p className={`text-3xl font-bold ${accent ? "text-white" : "text-foreground"}`}>{value}</p>
@@ -278,10 +279,10 @@ export default function Analytics() {
               <Line
                 type="monotone"
                 dataKey="count"
-                stroke="#F97316"
+                stroke="#cc0000"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: "#F97316" }}
+                activeDot={{ r: 4, fill: "#cc0000" }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -527,7 +528,7 @@ export default function Analytics() {
                       {agent.role.charAt(0) + agent.role.slice(1).toLowerCase()}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "rgba(204,0,0,0.1)", color: "#cc0000" }}>
                         {agent.assignedTickets}
                       </span>
                     </td>

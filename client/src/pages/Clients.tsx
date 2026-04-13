@@ -99,7 +99,7 @@ export default function Clients() {
             Clients
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--rt-text-3)" }}>
-            All active clients from HRMS — share the portal URL with each client
+            All active clients from Wisework — share the portal URL with each client
           </p>
         </div>
 
@@ -149,7 +149,7 @@ export default function Clients() {
               ) : isError ? (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center py-8 text-destructive text-sm">
-                    Failed to load clients. Make sure HRMS is running.
+                    Failed to load clients. Make sure Wisework is running.
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
