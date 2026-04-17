@@ -30,7 +30,14 @@ async function main() {
   const existingUser = await prisma.user.findUnique({ where: { email } });
 
   if (existingUser) {
-    console.log("Admin user already exists, skipping seed.");
+    // Always sync the password from ADMIN_PASSWORD env var so a redeploy
+    // with a new password takes effect without manual DB intervention.
+    const hashedPassword = await hashPassword(password);
+    await prisma.account.updateMany({
+      where: { userId: existingUser.id, providerId: "credential" },
+      data: { password: hashedPassword },
+    });
+    console.log("Admin user already exists, password synced from ADMIN_PASSWORD.");
   } else {
     const hashedPassword = await hashPassword(password);
     const userId = crypto.randomUUID();
