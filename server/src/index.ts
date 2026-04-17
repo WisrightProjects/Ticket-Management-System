@@ -58,6 +58,20 @@ if (process.env.NODE_ENV === "production" && !process.env.SENTRY_DSN) {
   console.warn("WARNING: SENTRY_DSN is not set — error reporting to Sentry is disabled.");
 }
 
+// Prevent pg / pg-boss connection drops from crashing the entire process.
+// pg.Pool emits 'error' events on dropped connections; if nothing catches
+// them they become uncaughtExceptions and kill the server (→ Nginx 502).
+// pg-boss has built-in reconnect logic, so we log + report and stay alive.
+process.on("uncaughtException", (err) => {
+  console.error("[process] uncaughtException (survived):", err.message);
+  Sentry.captureException(err);
+});
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  console.error("[process] unhandledRejection (survived):", err.message);
+  Sentry.captureException(err);
+});
+
 // Guard: refuse to start in production without a webhook secret
 if (process.env.NODE_ENV === "production" && !process.env.WEBHOOK_SECRET) {
   console.error("FATAL: WEBHOOK_SECRET must be set in production. Exiting.");

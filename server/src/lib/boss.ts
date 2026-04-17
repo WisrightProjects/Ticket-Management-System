@@ -8,6 +8,15 @@ const connectionString = rawUrl.includes("?")
   ? `${rawUrl}&keepAlives=true`
   : `${rawUrl}?keepAlives=true`;
 
-const boss = new PgBoss({ connectionString });
+const boss = new PgBoss({
+  connectionString,
+  // Limit pool size — the default (10) overwhelms small remote DBs and
+  // causes "Connection terminated due to connection timeout" errors.
+  max: 3,
+  // Check job state every 30s instead of the default (to reduce DB chatter).
+  monitorIntervalSeconds: 30,
+  // Label connections so they're identifiable in pg_stat_activity.
+  application_name: "tms-boss",
+});
 
 export default boss;
