@@ -224,6 +224,9 @@ if (!process.env.WEBHOOK_SECRET) {
 
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`[config] BETTER_AUTH_URL : ${process.env.BETTER_AUTH_URL ?? "(not set — sessions will break in production)"}`);
+  console.log(`[config] CLIENT_URL      : ${process.env.CLIENT_URL      ?? "(not set — CORS uses localhost default)"}`);
+  console.log(`[config] NODE_ENV        : ${process.env.NODE_ENV        ?? "development"}`);
 });
 
 export default app;

@@ -43,6 +43,11 @@ COPY --from=builder /app/client/dist /usr/share/nginx/html
 
 EXPOSE 80
 
-# envsubst replaces ${BACKEND_URL} in the nginx template at container start
+# envsubst replaces ${BACKEND_URL} in the nginx template at container start.
+# BACKEND_URL must be set to the backend service URL (e.g. http://backend:3000
+# or https://api-support.wisright.com). If unset, a clear error is printed.
 CMD ["/bin/sh", "-c", \
-  "envsubst '${BACKEND_URL}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+  "if [ -z \"$BACKEND_URL\" ]; then echo '[nginx] FATAL: BACKEND_URL is not set. Set it to your backend URL (e.g. http://backend:3000).' && exit 1; fi && \
+  echo \"[nginx] Proxying /api/ and /uploads/ to $BACKEND_URL\" && \
+  envsubst '${BACKEND_URL}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && \
+  nginx -g 'daemon off;'"]
