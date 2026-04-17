@@ -54,6 +54,6 @@ RUN mkdir -p /app/server/uploads
 COPY server/start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-EXPOSE 4000
+EXPOSE 3000
 
 CMD ["/app/start.sh"]
