@@ -4,11 +4,11 @@ import { PrismaClient } from "../generated/prisma/client.js";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  // Keep TCP connections alive so the remote DB (89.116.20.105) does not
-  // silently drop idle connections overnight. Without this, Prisma hangs on
-  // the first query after a period of inactivity → Better Auth returns no
-  // response → Nginx times out → 502 on /api/auth/* routes.
+  // Keep TCP connections alive so the remote DB does not silently drop idle
+  // connections overnight → prevents Better Auth hanging → 502.
   keepAlive: true,
+  // Cap pool size so we don't exhaust PostgreSQL's max_connections at startup.
+  max: 5,
   // Release idle connections after 30 s to avoid stale socket errors.
   idleTimeoutMillis: 30_000,
   // Fail fast if the DB is unreachable (default is no timeout).

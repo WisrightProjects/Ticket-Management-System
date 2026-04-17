@@ -206,12 +206,29 @@ if (process.env.NODE_ENV !== "test") {
     console.error("[boss] error:", err);
     Sentry.captureException(err, { tags: { source: "pg-boss" } });
   });
-  boss.start()
-    .then(() => Promise.all([registerClassifyWorker(), registerAutoResolveWorker(), registerSyncHrmsWorker()]))
-    .then(() => boss.schedule(SYNC_HRMS_QUEUE, "0 2 * * *", {}))
-    .then(() => watchInbox())
-    .then(() => console.log("[boss] Workers registered"))
-    .catch((err) => console.error("[boss] Failed to start:", err));
+
+  // Retry pg-boss startup up to 5 times with a 10 s delay between attempts.
+  // On a fresh deploy, the DB connection pool can be momentarily saturated by
+  // migration + seed connections, causing ECONNREFUSED for the first connect.
+  async function startBossWithRetry(attemptsLeft = 5): Promise<void> {
+    try {
+      await boss.start();
+      await Promise.all([registerClassifyWorker(), registerAutoResolveWorker(), registerSyncHrmsWorker()]);
+      await boss.schedule(SYNC_HRMS_QUEUE, "0 2 * * *", {});
+      await watchInbox();
+      console.log("[boss] Workers registered");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attemptsLeft > 1) {
+        console.warn(`[boss] Startup failed (${msg}), retrying in 10 s… (${attemptsLeft - 1} attempts left)`);
+        await new Promise((r) => setTimeout(r, 10_000));
+        return startBossWithRetry(attemptsLeft - 1);
+      }
+      console.error("[boss] Failed to start after all retries:", msg);
+      Sentry.captureException(err, { tags: { source: "pg-boss-startup" } });
+    }
+  }
+  startBossWithRetry();
 
   /* === IMAP startup (commented out — re-enable when IMAP Basic Auth is allowed in M365) ===
   async function startImapWithRetry() {
