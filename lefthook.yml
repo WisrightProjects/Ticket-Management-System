@@ -25,6 +25,11 @@ pre-push:
       fail_text: "Unit tests failed — all tests must pass before pushing"
 
     e2e-tests:
-      glob: "{client/src/**,server/src/**,tests/**,packages/**}"
+      glob:
+        - "client/src/**"
+        - "server/src/**"
+        - "tests/**"
+        - "tests/*"
+        - "packages/**"
       run: npx playwright test
       fail_text: "E2E tests failed — all tests must pass before pushing"
