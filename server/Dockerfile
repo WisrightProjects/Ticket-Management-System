@@ -47,21 +47,20 @@ COPY server        ./server
 # Copy generated Prisma client from build stage
 COPY --from=prisma /app/server/src/generated ./server/src/generated
 
-# Startup script: runs migrations + seed + server
-COPY server/start.sh /app/start.sh
-RUN sed -i 's/\r//' /app/start.sh && chmod +x /app/start.sh
-
-# Run as non-root user for security.
-# chown must happen BEFORE the VOLUME declaration — Docker discards permission
-# changes made to a directory after it has been declared as a VOLUME.
+# Create non-root user and set ownership
 RUN groupadd --system --gid 10001 appgroup && useradd --system --uid 10001 --gid appgroup appuser
 RUN mkdir -p /app/server/uploads && chown -R appuser:appgroup /app
-USER appuser
 
-# Declare the uploads volume after chown so Docker initialises the named
-# volume with appuser ownership on first creation.
+# Startup scripts
+COPY server/start.sh /app/start.sh
+COPY server/entrypoint.sh /app/entrypoint.sh
+RUN sed -i 's/\r//' /app/start.sh /app/entrypoint.sh && chmod +x /app/start.sh /app/entrypoint.sh
+
+# Declare the uploads volume after chown so fresh volumes get correct ownership.
 VOLUME /app/server/uploads
 
 EXPOSE 3000
 
-CMD ["/app/start.sh"]
+# Entrypoint runs as root to fix uploads ownership on existing volumes,
+# then drops to appuser via `su` before starting the application.
+CMD ["/app/entrypoint.sh"]
