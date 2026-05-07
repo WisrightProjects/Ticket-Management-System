@@ -20,7 +20,7 @@ function TicketDetailPage() {
         Back to Tickets
       </Link>
 
-      <div className="flex gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
         {/* Main content */}
         <div className="flex-1 min-w-0 space-y-6">
           <TicketDetail ticketId={ticketId} />
@@ -28,7 +28,7 @@ function TicketDetailPage() {
         </div>
 
         {/* Sticky metadata sidebar */}
-        <div className="w-72 xl:w-80 shrink-0 sticky top-[72px]">
+        <div className="w-full lg:w-72 xl:w-80 shrink-0 lg:sticky lg:top-[72px]">
           <TicketMetaSidebar ticketId={ticketId} />
         </div>
       </div>

@@ -172,8 +172,8 @@ function TicketMetaSidebar({ ticketId }: TicketMetaSidebarProps) {
   });
 
   // Derived server values for hours sync
-  const estimatedDefault = ticket?.estimatedHours == null ? "" : String(Number(ticket.estimatedHours));
-  const actualDefault    = ticket?.actualHours    == null ? "" : String(Number(ticket.actualHours));
+  const estimatedDefault = ticket?.estimatedHours == null ? "" : String(ticket.estimatedHours);
+  const actualDefault    = ticket?.actualHours    == null ? "" : String(ticket.actualHours);
 
   // Sync hours inputs from server-confirmed value, but skip while focused
   // so that unrelated mutation refetches don't discard in-progress typing.

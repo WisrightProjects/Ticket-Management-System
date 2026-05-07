@@ -81,7 +81,9 @@ test.describe("Ticket detail page layout", () => {
     await page.goto(`/tickets/${ticketId}`);
     await page.waitForResponse((r) => r.url().includes(`/api/tickets/${ticketId}`) && r.status() === 200);
 
-    // The metadata sidebar should be rendered (contains the status select)
+    // Sidebar container must carry the sticky class at large breakpoints
+    const sidebarContainer = page.locator("[class*='lg\\:sticky']");
+    await expect(sidebarContainer).toBeAttached();
     await expect(page.getByText("Details")).toBeVisible();
   });
 
@@ -91,7 +93,11 @@ test.describe("Ticket detail page layout", () => {
     await page.goto(`/tickets/${ticketId}`);
     await page.waitForResponse((r) => r.url().includes(`/api/tickets/${ticketId}`) && r.status() === 200);
 
-    // Both main content area (back link) and sidebar (Details heading) should coexist
+    // Flex-row container with lg breakpoint confirms two-column intent
+    const layoutContainer = page.locator("[class*='lg\\:flex-row']");
+    await expect(layoutContainer).toBeAttached();
+
+    // Both main content (back link) and sidebar (Details) must co-exist
     await expect(page.getByRole("link", { name: "Back to Tickets" })).toBeVisible();
     await expect(page.getByText("Details")).toBeVisible();
   });
@@ -112,9 +118,14 @@ test.describe("REPLIES section — no duplicate description", () => {
     // The description should appear exactly once — in the DESCRIPTION section
     const descriptionSection = page.locator("text=DESCRIPTION").locator("..");
     await expect(descriptionSection).toBeVisible();
+    await expect(
+      descriptionSection.getByText("Testing the full-screen ticket detail and replies changes.")
+    ).toHaveCount(1);
 
     // The REPLIES section should NOT contain a Customer badge before any reply is posted
-    const repliesSection = page.locator("h3", { hasText: /Replies/ }).locator("~ div");
+    const repliesSection = page
+      .getByRole("heading", { name: /Replies/i })
+      .locator("xpath=following-sibling::div[1]");
     const customerBadgesInReplies = repliesSection.locator("span", { hasText: "Customer" });
     await expect(customerBadgesInReplies).toHaveCount(0);
   });
