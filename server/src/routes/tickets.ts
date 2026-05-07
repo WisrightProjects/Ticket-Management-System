@@ -219,7 +219,8 @@ router.get("/assignable-users", async (req, res) => {
 
   let merged: { id: string; name: string }[];
 
-  if (projectId && hrmsEmployees.length > 0) {
+  if (projectId) {
+    // Project-scoped: only show employees assigned to this HRMS project.
     // For each HRMS project member, find their TMS account (matched by email).
     // If none exists, auto-provision a TMS AGENT account so they can be assigned tickets.
     const provisionedUsers = await Promise.all(
@@ -267,9 +268,8 @@ router.get("/assignable-users", async (req, res) => {
 
     merged = provisionedUsers.filter(Boolean) as { id: string; name: string }[];
   } else {
-    // No project filter (or HRMS returned no project employees) —
-    // show all active ADMIN/AGENT TMS users + any HRMS directory employees
-    // that don't already have a TMS account.
+    // No project filter — show all active ADMIN/AGENT TMS users + any HRMS directory
+    // employees that don't already have a TMS account.
     const hrmsExtra = hrmsEmployees
       .filter((e) => !tmsEmailSet.has(e.email.toLowerCase()) && e.name)
       .map((e) => ({ id: e.id, name: e.name }));

@@ -47,19 +47,20 @@ COPY server        ./server
 # Copy generated Prisma client from build stage
 COPY --from=prisma /app/server/src/generated ./server/src/generated
 
-# Uploads directory — must be mounted as a persistent volume in production
-# so uploaded files survive container rebuilds/redeploys.
-RUN mkdir -p /app/server/uploads
-VOLUME /app/server/uploads
-
 # Startup script: runs migrations + seed + server
 COPY server/start.sh /app/start.sh
 RUN sed -i 's/\r//' /app/start.sh && chmod +x /app/start.sh
 
-# Run as non-root user for security
+# Run as non-root user for security.
+# chown must happen BEFORE the VOLUME declaration — Docker discards permission
+# changes made to a directory after it has been declared as a VOLUME.
 RUN groupadd --system --gid 10001 appgroup && useradd --system --uid 10001 --gid appgroup appuser
-RUN chown -R appuser:appgroup /app
+RUN mkdir -p /app/server/uploads && chown -R appuser:appgroup /app
 USER appuser
+
+# Declare the uploads volume after chown so Docker initialises the named
+# volume with appuser ownership on first creation.
+VOLUME /app/server/uploads
 
 EXPOSE 3000
 

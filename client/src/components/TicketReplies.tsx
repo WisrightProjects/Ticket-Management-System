@@ -94,40 +94,6 @@ function TicketReplies({ ticketId }: TicketRepliesProps) {
       </h3>
 
       <div className="space-y-3 mb-4">
-        {/* Original customer message — always first */}
-        {ticket ? (
-          <div className="border rounded-lg p-4 bg-blue-50/50 dark:bg-blue-950/20">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-semibold">
-                {ticket.senderName ?? ticket.createdBy.name}
-              </span>
-              <Badge variant="outline" className="text-xs py-0">Customer</Badge>
-              <span className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</span>
-            </div>
-            <p className="text-sm whitespace-pre-wrap">{ticket.description}</p>
-            {ticket.attachments && ticket.attachments.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {ticket.attachments.map((att) => (
-                  <a
-                    key={att.id}
-                    href={att.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={att.filename}
-                    className="group relative block w-20 h-20 rounded-lg overflow-hidden border border-border hover:border-accent transition-colors"
-                  >
-                    <img src={att.url} alt={att.filename} className="w-full h-full object-cover" loading="lazy" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                    <p className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] px-1 py-0.5 truncate">{att.filename}</p>
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <Skeleton className="h-20 w-full" />
-        )}
-
         {/* Agent / subsequent replies */}
         {isLoading && <Skeleton className="h-16 w-full" />}
 
