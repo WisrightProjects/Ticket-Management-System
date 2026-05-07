@@ -17,12 +17,12 @@
     "jsx": "react-jsx",
 
     /* Linting */
+    "ignoreDeprecations": "5.0",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@tms/core": ["../packages/core/src/index.ts"]

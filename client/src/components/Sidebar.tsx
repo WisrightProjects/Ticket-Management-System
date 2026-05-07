@@ -1,18 +1,22 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Inbox, Users, BarChart2, Building2, Ticket } from "lucide-react";
+import { LayoutDashboard, Inbox, Users, BarChart2, Building2, Ticket, Plus } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 import { ROLES, type UserRole } from "@tms/core";
 
 const NAV_ITEMS = [
-  { path: "/",                 label: "Dashboard",  icon: LayoutDashboard, exact: true  },
-  { path: "/tickets",          label: "Tickets",    icon: Inbox,           exact: false },
-  { path: "/internal/tickets", label: "My Tickets", icon: Ticket,          exact: false },
+  { path: "/",        label: "Dashboard", icon: LayoutDashboard, exact: true  },
+  { path: "/tickets", label: "Tickets",   icon: Inbox,           exact: false },
+];
+
+const AGENT_ITEMS = [
+  { path: "/internal/tickets", label: "My Tickets", icon: Ticket, exact: false },
 ];
 
 const ADMIN_ITEMS = [
-  { path: "/users",     label: "Users",     icon: Users,     exact: false },
-  { path: "/clients",   label: "Clients",   icon: Building2, exact: false },
-  { path: "/analytics", label: "Analytics", icon: BarChart2, exact: false },
+  { path: "/users",            label: "Users",        icon: Users,     exact: false },
+  { path: "/clients",          label: "Clients",      icon: Building2, exact: false },
+  { path: "/analytics",        label: "Analytics",    icon: BarChart2, exact: false },
+  { path: "/internal/submit",  label: "Raise Ticket", icon: Plus,      exact: false },
 ];
 
 interface SidebarProps {
@@ -30,7 +34,7 @@ export default function Sidebar({ open = false, onClose }: SidebarProps) {
       ? location.pathname === path
       : location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
 
-  const allItems = [...NAV_ITEMS, ...(isAdmin ? ADMIN_ITEMS : [])];
+  const allItems = [...NAV_ITEMS, ...(isAdmin ? ADMIN_ITEMS : AGENT_ITEMS)];
 
   return (
     <aside

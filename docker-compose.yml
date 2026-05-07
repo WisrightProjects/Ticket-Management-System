@@ -45,6 +45,9 @@ services:
       HRMS_API_URL:       ${HRMS_API_URL:-}
       HRMS_API_EMAIL:     ${HRMS_API_EMAIL:-}
       HRMS_API_PASSWORD:  ${HRMS_API_PASSWORD:-}
+      # WiseWork notification integration (leave blank to disable)
+      WISEWORK_NOTIFICATION_URL:     ${WISEWORK_NOTIFICATION_URL:-}
+      WISEWORK_NOTIFICATION_API_KEY: ${WISEWORK_NOTIFICATION_API_KEY:-}
       # Optional — leave blank to disable
       MOONSHOT_API_KEY:       ${MOONSHOT_API_KEY:-}
       SENTRY_DSN:             ${SENTRY_DSN:-}
