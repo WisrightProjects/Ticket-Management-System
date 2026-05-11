@@ -226,27 +226,45 @@ function TicketMetaSidebar({ ticketId }: TicketMetaSidebarProps) {
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Details</h3>
 
         <DetailRow label="Project">
-          <div className="space-y-1.5">
-            <Select
-              value={effectivePickerClientId || NO_CLIENT}
-              onValueChange={(val) => setPickerClientOverride(!val || val === NO_CLIENT ? "" : val)}
-            >
-              <SelectTrigger size="sm" className="w-full" aria-label="Client">
-                {effectivePickerClientId ? (
-                  <span>{hrmsClients.find((c) => c.id === effectivePickerClientId)?.name ?? "—"}</span>
-                ) : (
-                  <span className="text-muted-foreground">Select client…</span>
-                )}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_CLIENT}>
-                  <span className="text-muted-foreground">— Select client —</span>
-                </SelectItem>
-                {hrmsClients.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-1.5 min-w-0">
+            {/* Client row — static label when already assigned, full dropdown otherwise */}
+            {ticket.hrmsClientId && !pickerClientOverride ? (
+              <div className="flex items-center justify-between gap-2 h-8 px-2 rounded-md border border-border bg-background text-sm min-w-0">
+                <span className="truncate text-sm">
+                  {hrmsClients.find((c) => c.id === ticket.hrmsClientId)?.name ?? ticket.hrmsClientId}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPickerClientOverride(ticket.hrmsClientId!)}
+                  className="text-xs text-muted-foreground hover:text-foreground shrink-0 whitespace-nowrap"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <Select
+                value={effectivePickerClientId || NO_CLIENT}
+                onValueChange={(val) => setPickerClientOverride(!val || val === NO_CLIENT ? "" : val)}
+              >
+                <SelectTrigger size="sm" className="w-full min-w-0" aria-label="Client">
+                  {effectivePickerClientId ? (
+                    <span className="truncate">
+                      {hrmsClients.find((c) => c.id === effectivePickerClientId)?.name ?? "—"}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Select client…</span>
+                  )}
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CLIENT}>
+                    <span className="text-muted-foreground">— Select client —</span>
+                  </SelectItem>
+                  {hrmsClients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {effectivePickerClientId && (
               <Select
                 value=""
@@ -260,14 +278,15 @@ function TicketMetaSidebar({ ticketId }: TicketMetaSidebarProps) {
                     clientId: effectivePickerClientId,
                     clientName: client?.name ?? "",
                   });
+                  setPickerClientOverride("");
                 }}
                 disabled={projectMutation.isPending || hrmsProjects.length === 0}
               >
-                <SelectTrigger size="sm" className="w-full">
+                <SelectTrigger size="sm" className="w-full min-w-0">
                   {ticket.hrmsProjectName ? (
-                    <span>
-                      {ticket.hrmsProjectName}{" "}
-                      <span className="text-muted-foreground">(change…)</span>
+                    <span className="flex items-center gap-1 min-w-0 overflow-hidden">
+                      <span className="truncate">{ticket.hrmsProjectName}</span>
+                      <span className="text-muted-foreground shrink-0">(change…)</span>
                     </span>
                   ) : (
                     <span className="text-muted-foreground">Select project…</span>

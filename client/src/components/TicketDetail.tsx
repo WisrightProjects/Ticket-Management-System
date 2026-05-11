@@ -17,6 +17,7 @@ import { Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ImageLightbox } from "@/components/ImageLightbox";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -54,25 +55,39 @@ function AttachmentRow({
 }: {
   attachments: Array<{ id: string; filename: string; mimetype: string; url: string }>;
 }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const images = attachments.filter((a) => a.mimetype.startsWith("image/"));
+
   if (attachments.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-3 mt-3">
-      {attachments.map((a) => (
-        <a
-          key={a.id}
-          href={a.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex flex-col items-center gap-1 group"
-          title={a.filename}
-        >
-          <AttachmentThumb a={a} />
-          <span className="text-xs text-muted-foreground max-w-[80px] truncate">
-            {a.filename.replace(ATTACHMENT_PREFIX_RE, "")}
-          </span>
-        </a>
-      ))}
-    </div>
+    <>
+      <div className="flex flex-wrap gap-3 mt-3">
+        {attachments.map((a) => {
+          const imgIdx = images.findIndex((img) => img.id === a.id);
+          return (
+            <button
+              key={a.id}
+              type="button"
+              onClick={() => imgIdx >= 0 ? setLightboxIndex(imgIdx) : window.open(a.url, "_blank", "noopener,noreferrer")}
+              className="flex flex-col items-center gap-1 group cursor-pointer"
+              title={a.filename}
+            >
+              <AttachmentThumb a={a} />
+              <span className="text-xs text-muted-foreground max-w-[80px] truncate">
+                {a.filename.replace(ATTACHMENT_PREFIX_RE, "")}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={images.map((a) => ({ url: a.url, filename: a.filename.replace(ATTACHMENT_PREFIX_RE, "") }))}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+    </>
   );
 }
 

@@ -582,6 +582,7 @@ router.patch("/:id/assignee", async (req: Request<{ id: string }>, res: Response
         ticketUrl:      `${baseUrl}/tickets/${updated.ticketId}`,
         priority:       updated.priority,
         assignedByName: req.user!.name,
+        description:    updated.description ?? undefined,
       });
     }
   }

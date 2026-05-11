@@ -14,6 +14,7 @@ export interface WiseworkTicketPayload {
   ticketUrl:      string;
   priority:       string;
   assignedByName: string;
+  description?:   string;
 }
 
 async function wiseworkFetch(path: string, method: string, body: object): Promise<void> {
