@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUploadField } from "@/components/portal/ImageUploadField";
+import { ImageLightbox } from "@/components/ImageLightbox";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -25,6 +26,42 @@ function formatDate(iso: string) {
     year: "numeric", month: "short", day: "numeric",
     hour: "numeric", minute: "2-digit",
   });
+}
+
+interface CommentAttachment {
+  id:       string;
+  url:      string;
+  filename: string;
+}
+
+function CommentAttachments({ attachments }: { attachments: CommentAttachment[] }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {attachments.map((att, idx) => (
+          <button
+            key={att.id}
+            type="button"
+            onClick={() => setLightboxIndex(idx)}
+            className="group relative block w-16 h-16 rounded overflow-hidden border border-border hover:border-accent transition-colors cursor-pointer"
+            title={att.filename}
+          >
+            <img src={att.url} alt={att.filename} className="w-full h-full object-cover" loading="lazy" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+            <p className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] px-1 truncate">{att.filename}</p>
+          </button>
+        ))}
+      </div>
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={attachments.map((a) => ({ url: a.url, filename: a.filename }))}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
+    </>
+  );
 }
 
 interface TicketRepliesProps {
@@ -115,21 +152,7 @@ function TicketReplies({ ticketId }: TicketRepliesProps) {
             </div>
             <p className="text-sm whitespace-pre-wrap">{c.content}</p>
             {c.attachments && c.attachments.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {c.attachments.map((att) => (
-                  <a
-                    key={att.id}
-                    href={att.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group relative block w-16 h-16 rounded overflow-hidden border border-border hover:border-accent transition-colors"
-                    title={att.filename}
-                  >
-                    <img src={att.url} alt={att.filename} className="w-full h-full object-cover" loading="lazy" />
-                    <p className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] px-1 truncate">{att.filename}</p>
-                  </a>
-                ))}
-              </div>
+              <CommentAttachments attachments={c.attachments} />
             )}
           </div>
         ))}
