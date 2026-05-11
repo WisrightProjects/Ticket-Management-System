@@ -54,7 +54,9 @@ function TicketMetaSidebar({ ticketId }: TicketMetaSidebarProps) {
   const [estimatedVal, setEstimatedVal] = useState("");
   const [actualVal, setActualVal]       = useState("");
 
+  // "" = no override; non-empty = client ID or "__open__" (picker open but source ticket had no hrmsClientId)
   const [pickerClientOverride, setPickerClientOverride] = useState<string>("");
+  const isPickerOpen = pickerClientOverride !== "";
 
   const { data: ticket, isLoading } = useQuery({
     queryKey: ["ticket", ticketId],
@@ -65,7 +67,8 @@ function TicketMetaSidebar({ ticketId }: TicketMetaSidebarProps) {
     enabled: !!ticketId,
   });
 
-  const effectivePickerClientId = pickerClientOverride || (ticket?.hrmsClientId ?? "");
+  const effectivePickerClientId =
+    pickerClientOverride === "__open__" ? "" : (pickerClientOverride || (ticket?.hrmsClientId ?? ""));
 
   const { data: assignableUsers = [] } = useQuery<AssignableUser[]>({
     queryKey: ["assignable-users", ticket?.hrmsProjectId ?? null],
@@ -228,14 +231,17 @@ function TicketMetaSidebar({ ticketId }: TicketMetaSidebarProps) {
         <DetailRow label="Project">
           <div className="space-y-1.5 min-w-0">
             {/* Client row — static label when already assigned, full dropdown otherwise */}
-            {ticket.hrmsClientId && !pickerClientOverride ? (
+            {(ticket.hrmsClientId || ticket.hrmsClientName) && !isPickerOpen ? (
               <div className="flex items-center justify-between gap-2 h-8 px-2 rounded-md border border-border bg-background text-sm min-w-0">
                 <span className="truncate text-sm">
-                  {hrmsClients.find((c) => c.id === ticket.hrmsClientId)?.name ?? ticket.hrmsClientId}
+                  {ticket.hrmsClientName
+                    ?? hrmsClients.find((c) => c.id === ticket.hrmsClientId)?.name
+                    ?? ticket.hrmsClientId
+                    ?? "—"}
                 </span>
                 <button
                   type="button"
-                  onClick={() => setPickerClientOverride(ticket.hrmsClientId!)}
+                  onClick={() => setPickerClientOverride(ticket.hrmsClientId || "__open__")}
                   className="text-xs text-muted-foreground hover:text-foreground shrink-0 whitespace-nowrap"
                 >
                   Change
