@@ -11,6 +11,7 @@ import {
 } from "@tms/core";
 import axios from "axios";
 import { TicketDetail } from "../TicketDetail";
+import { TicketMetaSidebar } from "../TicketMetaSidebar";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -64,6 +65,14 @@ function renderDetail(ticketId = "TKT-0001") {
   return render(
     <QueryClientProvider client={makeQueryClient()}>
       <TicketDetail ticketId={ticketId} />
+    </QueryClientProvider>
+  );
+}
+
+function renderMetaSidebar(ticketId = "TKT-0001") {
+  return render(
+    <QueryClientProvider client={makeQueryClient()}>
+      <TicketMetaSidebar ticketId={ticketId} />
     </QueryClientProvider>
   );
 }
@@ -167,15 +176,15 @@ describe("TicketDetail — ticket data rendering", () => {
   });
 
   it("shows Project label with client/project picker", async () => {
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     expect(screen.getByText("Project")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /client/i })).toBeInTheDocument();
   });
 
   it("shows Created by label + author name (Admin)", async () => {
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     expect(screen.getByText("Created by")).toBeInTheDocument();
     expect(screen.getByText("Admin")).toBeInTheDocument();
   });
@@ -190,8 +199,8 @@ describe("TicketDetail — ticket data rendering", () => {
   });
 
   it("shows Assigned to label", async () => {
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     expect(screen.getByText("Assigned to")).toBeInTheDocument();
   });
 });
@@ -207,8 +216,8 @@ describe("TicketDetail — hours fields rendering", () => {
 
   it("renders estimated and actual hours as numeric inputs when set", async () => {
     setupGetSuccess({ ...BASE_TICKET, estimatedHours: 8, actualHours: 4 });
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     expect(screen.getByText("Estimated Hours")).toBeInTheDocument();
     expect(screen.getByText("Actual Hours")).toBeInTheDocument();
     expect(screen.getByTestId("estimated-hours-display")).toHaveValue(8);
@@ -217,8 +226,8 @@ describe("TicketDetail — hours fields rendering", () => {
 
   it("renders empty inputs with em-dash placeholder when both hours fields are null", async () => {
     setupGetSuccess({ ...BASE_TICKET, estimatedHours: null, actualHours: null });
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     expect(screen.getByTestId("estimated-hours-display")).toHaveValue(null);
     expect(screen.getByTestId("actual-hours-display")).toHaveValue(null);
     expect(screen.getByTestId("estimated-hours-display")).toHaveAttribute("placeholder", "—");
@@ -237,22 +246,22 @@ describe("TicketDetail — assignee display", () => {
 
   it("shows Unassigned when assignedTo is null", async () => {
     setupGetSuccess(BASE_TICKET); // assignedTo: null
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     expect(screen.getByText(/unassigned/i)).toBeInTheDocument();
   });
 
   it("shows the assignee name when assigned", async () => {
     setupGetSuccess(ASSIGNED_TICKET); // assignedTo: Alice Agent
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     expect(screen.getByText("Alice Agent")).toBeInTheDocument();
   });
 
   it("fetches assignable users on mount", async () => {
     setupGetSuccess(BASE_TICKET);
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     expect(mockedAxios.get).toHaveBeenCalledWith(
       expect.stringContaining("/api/tickets/assignable-users"),
       expect.any(Object)
@@ -271,32 +280,32 @@ describe("TicketDetail — status mutation", () => {
   });
 
   it("Status trigger shows the current status label", async () => {
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     const statusRow = screen.getByText("Status").closest("div")!;
     expect(statusRow).toHaveTextContent("Not Started");
   });
 
   it("clicking a status option calls PATCH /status with the new value", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     mockedAxios.patch = vi.fn().mockResolvedValue({
       data: { ...BASE_TICKET, status: "OPEN_IN_PROGRESS" },
     });
 
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
 
-    // Find the Status trigger — the one containing "Not Started" (from the EnumSelect)
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const statusTrigger = Array.from(triggers).find((t) =>
       t.textContent?.includes("Not Started")
     ) as HTMLElement;
-    await userEvent.click(statusTrigger);
+    await user.click(statusTrigger);
 
     const items = document.querySelectorAll('[data-slot="select-item"]');
     const inProgressItem = Array.from(items).find((i) =>
       i.textContent?.includes("In Progress")
     ) as HTMLElement;
-    await userEvent.click(inProgressItem);
+    await user.click(inProgressItem);
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -308,22 +317,23 @@ describe("TicketDetail — status mutation", () => {
   });
 
   it("shows error message when PATCH /status fails", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     mockedAxios.patch = vi.fn().mockRejectedValue(new Error("Server error"));
 
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const statusTrigger = Array.from(triggers).find((t) =>
       t.textContent?.includes("Not Started")
     ) as HTMLElement;
-    await userEvent.click(statusTrigger);
+    await user.click(statusTrigger);
 
     const items = document.querySelectorAll('[data-slot="select-item"]');
     const doneItem = Array.from(items).find((i) =>
       i.textContent?.includes("Done")
     ) as HTMLElement;
-    await userEvent.click(doneItem);
+    await user.click(doneItem);
 
     await waitFor(() => {
       expect(screen.getByText(/failed to update status/i)).toBeInTheDocument();
@@ -342,31 +352,32 @@ describe("TicketDetail — category mutation", () => {
   });
 
   it("Category trigger shows the current type label", async () => {
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
     const categoryRow = screen.getByText("Category").closest("div")!;
     expect(categoryRow).toHaveTextContent("Support");
   });
 
   it("clicking a type option calls PATCH /type with the new value", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     mockedAxios.patch = vi.fn().mockResolvedValue({
       data: { ...BASE_TICKET, type: "BUG" },
     });
 
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const categoryTrigger = Array.from(triggers).find((t) =>
       t.textContent?.includes("Support")
     ) as HTMLElement;
-    await userEvent.click(categoryTrigger);
+    await user.click(categoryTrigger);
 
     const items = document.querySelectorAll('[data-slot="select-item"]');
     const bugItem = Array.from(items).find((i) =>
       i.textContent?.trim() === "Bug"
     ) as HTMLElement;
-    await userEvent.click(bugItem);
+    await user.click(bugItem);
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -378,22 +389,23 @@ describe("TicketDetail — category mutation", () => {
   });
 
   it("shows error message when PATCH /type fails", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     mockedAxios.patch = vi.fn().mockRejectedValue(new Error("Server error"));
 
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const categoryTrigger = Array.from(triggers).find((t) =>
       t.textContent?.includes("Support")
     ) as HTMLElement;
-    await userEvent.click(categoryTrigger);
+    await user.click(categoryTrigger);
 
     const items = document.querySelectorAll('[data-slot="select-item"]');
     const taskItem = Array.from(items).find((i) =>
       i.textContent?.trim() === "Task"
     ) as HTMLElement;
-    await userEvent.click(taskItem);
+    await user.click(taskItem);
 
     await waitFor(() => {
       expect(screen.getByText(/failed to update category/i)).toBeInTheDocument();
@@ -411,20 +423,21 @@ describe("TicketDetail — assign mutation", () => {
   });
 
   it("selecting a user calls PATCH /assignee with that user's ID", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     setupGetSuccess(BASE_TICKET); // unassigned
     mockedAxios.patch = vi.fn().mockResolvedValue({ data: ASSIGNED_TICKET });
 
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const assigneeTrigger = Array.from(triggers).find((t) =>
       t.textContent?.includes("Unassigned")
     ) as HTMLElement;
-    await userEvent.click(assigneeTrigger);
+    await user.click(assigneeTrigger);
 
     const items = document.querySelectorAll('[data-slot="select-item"]');
-    await userEvent.click(items[1]); // Alice Agent (index 0 is Unassigned)
+    await user.click(items[1]); // Alice Agent (index 0 is Unassigned)
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -436,20 +449,21 @@ describe("TicketDetail — assign mutation", () => {
   });
 
   it("selecting Unassigned calls PATCH /assignee with null", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     setupGetSuccess(ASSIGNED_TICKET); // starts assigned
     mockedAxios.patch = vi.fn().mockResolvedValue({ data: BASE_TICKET });
 
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const assigneeTrigger = Array.from(triggers).find((t) =>
       t.textContent?.includes("Alice Agent")
     ) as HTMLElement;
-    await userEvent.click(assigneeTrigger);
+    await user.click(assigneeTrigger);
 
     const items = document.querySelectorAll('[data-slot="select-item"]');
-    await userEvent.click(items[0]); // Unassigned
+    await user.click(items[0]); // Unassigned
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -461,21 +475,22 @@ describe("TicketDetail — assign mutation", () => {
   });
 
   it("shows error when PATCH /assignee fails", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     setupGetSuccess(BASE_TICKET);
     mockedAxios.patch = vi.fn().mockRejectedValue(new Error("Server error"));
 
-    renderDetail();
-    await screen.findByText("TKT-0001");
+    renderMetaSidebar();
+    await screen.findByText("Details");
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const assigneeTrigger = Array.from(triggers).find((t) =>
       t.textContent?.includes("Unassigned")
     ) as HTMLElement;
-    await userEvent.click(assigneeTrigger);
+    await user.click(assigneeTrigger);
 
     const items = document.querySelectorAll('[data-slot="select-item"]');
     const aliceItem = Array.from(items).find((i) => i.textContent?.includes("Alice Agent")) as HTMLElement;
-    await userEvent.click(aliceItem);
+    await user.click(aliceItem);
 
     await waitFor(() => {
       expect(screen.getByText(/failed to update assignee/i)).toBeInTheDocument();

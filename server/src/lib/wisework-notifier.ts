@@ -41,3 +41,39 @@ export async function notifyWiseworkAssignment(payload: WiseworkTicketPayload): 
 export async function notifyWiseworkPriorityUpdate(ticketId: string, priority: string): Promise<void> {
   await wiseworkFetch(`/ticket-notifications/priority`, "PATCH", { ticketId, priority });
 }
+
+export interface WiseworkAttachmentPayload {
+  url:      string;
+  filename: string;
+}
+
+export interface WiseworkCommentPayload {
+  id:          string;
+  content:     string;
+  senderType:  string;
+  authorName:  string;
+  createdAt:   string;
+  attachments: WiseworkAttachmentPayload[];
+}
+
+export interface WiseworkSyncPayload {
+  employeeEmail:   string;
+  ticketId:        string;
+  title:           string;
+  description?:    string;
+  type?:           string;
+  status:          string;
+  priority:        string;
+  estimatedHours?: number;
+  actualHours?:    number;
+  ticketUrl:       string;
+  assignedByName:  string;
+  senderName?:     string;
+  projectName?:    string;
+  comments?:       WiseworkCommentPayload[];
+  attachments?:    WiseworkAttachmentPayload[];
+}
+
+export async function syncTicketToWisework(payload: WiseworkSyncPayload): Promise<void> {
+  await wiseworkFetch("/ticket-notifications/sync", "POST", payload);
+}
