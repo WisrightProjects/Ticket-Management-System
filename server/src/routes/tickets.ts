@@ -158,6 +158,119 @@ async function pushSyncToWisework(ticketId: string, assignedByName: string): Pro
   }
 }
 
+// POST /tickets/wisework — WiseWork creates a new support ticket on behalf of a user.
+// Registered BEFORE requireAuth so that machine-to-machine API-key calls are not
+// rejected for missing a session cookie.
+router.post("/wisework", async (req: Request, res: Response) => {
+  // Parse multipart/form-data
+  try {
+    await runUpload(req, res);
+  } catch (err: unknown) {
+    const isMulterError = err instanceof multer.MulterError;
+    if (isMulterError && (err as multer.MulterError).code === "LIMIT_FILE_SIZE") {
+      res.status(400).json({ error: "Each image must be under 1MB" });
+      return;
+    }
+    if (isMulterError && (err as multer.MulterError).code === "LIMIT_FILE_COUNT") {
+      res.status(400).json({ error: "Maximum 1 image allowed" });
+      return;
+    }
+    res.status(400).json({ error: err instanceof Error ? err.message : "File upload error" });
+    return;
+  }
+
+  // API key auth — same pattern as /:id/comments/wisework
+  const apiKey = process.env.WISEWORK_NOTIFICATION_API_KEY ?? "";
+  if (!apiKey || req.headers["x-api-key"] !== apiKey) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+
+  const { name, email, subject, description } = req.body as {
+    name?: string; email?: string; subject?: string; description?: string;
+  };
+  if (!name?.trim() || !email?.trim() || !subject?.trim() || !description?.trim()) {
+    res.status(400).json({ error: "name, email, subject, and description are required" });
+    return;
+  }
+
+  let ticket: { id: string; ticketId: string };
+  try {
+    // Find first ADMIN user to own the ticket (same pattern as portal route)
+    const admin = await prisma.user.findFirst({
+      where:  { role: "ADMIN" },
+      select: { id: true },
+    });
+    if (!admin) {
+      res.status(500).json({ error: "No admin user found" });
+      return;
+    }
+
+    // Generate ticketId using the same race-safe transaction pattern as portal.ts:
+    // find the highest existing TKT-NNNN, increment, format with leading zeros.
+    // Uses SERIALIZABLE isolation to prevent P2002 duplicate ticketId under concurrent requests.
+    ticket = await prisma.$transaction(async (tx) => {
+      const latest = await tx.ticket.findFirst({
+        orderBy: { ticketId: "desc" },
+        select:  { ticketId: true },
+      });
+
+      let nextNumber = 1;
+      if (latest) {
+        const match = latest.ticketId.match(/^TKT-(\d+)$/);
+        if (match) nextNumber = parseInt(match[1], 10) + 1;
+      }
+
+      const ticketId = `TKT-${String(nextNumber).padStart(4, "0")}`;
+
+      return tx.ticket.create({
+        data: {
+          ticketId,
+          title:       subject.trim(),
+          description: description.trim(),
+          type:        TICKET_TYPE.SUPPORT,
+          priority:    "MEDIUM",
+          status:      STATUS.UN_ASSIGNED,
+          project:     "WiseWork Support",
+          senderName:  name.trim(),
+          senderEmail: email.trim(),
+          createdById: admin.id,
+        },
+        select: { id: true, ticketId: true },
+      });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    // Save attachment if present
+    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      const file = uploadedFiles[0];
+      await prisma.attachment.create({
+        data: {
+          id:       randomUUID(),
+          filename: sanitizeFilename(file.originalname),
+          filepath: file.path,
+          mimetype: file.mimetype,
+          size:     file.size,
+          ticketId: ticket.id,
+        },
+      });
+    }
+  } catch (err: unknown) {
+    const code = (err as any)?.code;
+    if (code === "P2002") {
+      res.status(409).json({ error: "Ticket creation conflict — please retry" });
+      return;
+    }
+    console.error("[POST /tickets/wisework]", err);
+    res.status(500).json({ error: "Internal server error" });
+    return;
+  }
+
+  res.status(201).json({ ticketId: ticket.ticketId });
+
+  void pushSyncToWisework(ticket.ticketId, name.trim());
+});
+
 // All ticket routes require authentication
 router.use(requireAuth);
 
