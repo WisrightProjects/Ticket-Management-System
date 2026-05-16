@@ -7,9 +7,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "resolveJsonModule": true,
-    "ignoreDeprecations": "5.0",
     "types": ["bun"],
-    "baseUrl": ".",
     "paths": {
       "@tms/core": ["../packages/core/src/index.ts"]
     }

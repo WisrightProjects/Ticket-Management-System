@@ -11,7 +11,7 @@ import prisma from "../lib/prisma.js";
 import { ticketQuerySchema, assignTicketSchema, updateStatusSchema, updateTypeSchema, updatePrioritySchema, updateEstimatedHoursSchema, updateActualHoursSchema, createCommentSchema, polishReplySchema, implementationPlanSchema, requestMoreInfoSchema, STATUS, TICKET_TYPE, ROLES, COMMENT_SENDER_TYPES } from "@tms/core";
 import { Prisma } from "../generated/prisma/client.js";
 import { sendReplyEmail, sendImplementationPlanPostedEmail, sendImplementationMoreInfoRequestedEmail } from "../lib/mailer.js";
-import { notifyWiseworkAssignment, notifyWiseworkPriorityUpdate } from "../lib/wisework-notifier.js";
+import { notifyWiseworkAssignment, notifyWiseworkPriorityUpdate, syncTicketToWisework } from "../lib/wisework-notifier.js";
 import { getAllClients, getClientProjects, getEmployeeDirectory, getProjectEmployees, type HrmsEmployee } from "../lib/hrms.js";
 import { uploadArray } from "../lib/upload.js";
 
@@ -91,6 +91,71 @@ function serializeHours<T extends TicketWithHours>(t: T): Omit<T, "estimatedHour
     estimatedHours: t.estimatedHours == null ? null : Number(t.estimatedHours),
     actualHours:    t.actualHours    == null ? null : Number(t.actualHours),
   };
+}
+
+// Fire-and-forget: fetch full ticket snapshot and push to WiseWork sync endpoint.
+// Only runs when the ticket is assigned (assignedTo is set).
+async function pushSyncToWisework(ticketId: string, assignedByName: string): Promise<void> {
+  const baseUrl = process.env.RIGHT_TRACKER_URL ?? process.env.BETTER_AUTH_URL ?? "http://localhost:5173";
+  try {
+    const t = await prisma.ticket.findUnique({
+      where:  { ticketId },
+      select: {
+        ticketId:        true,
+        title:           true,
+        description:     true,
+        type:            true,
+        status:          true,
+        priority:        true,
+        estimatedHours:  true,
+        actualHours:     true,
+        hrmsProjectName: true,
+        senderName:      true,
+        assignedTo:      { select: { email: true } },
+        attachments: { select: { filename: true, filepath: true, mimetype: true } },
+        comments: {
+          select: {
+            id: true, content: true, senderType: true,
+            author: { select: { name: true } },
+            createdAt: true,
+            attachments: { select: { filename: true, filepath: true, mimetype: true } },
+          },
+          orderBy: { createdAt: "asc" as const },
+        },
+      },
+    });
+    if (!t?.assignedTo) return;
+    await syncTicketToWisework({
+      employeeEmail:   t.assignedTo.email,
+      ticketId:        t.ticketId,
+      title:           t.title,
+      description:     t.description   ?? undefined,
+      type:            t.type          ?? undefined,
+      status:          t.status,
+      priority:        t.priority,
+      estimatedHours:  t.estimatedHours ? Number(t.estimatedHours) : undefined,
+      actualHours:     t.actualHours    ? Number(t.actualHours)    : undefined,
+      ticketUrl:       `${baseUrl}/tickets/${t.ticketId}`,
+      assignedByName,
+      senderName:      t.senderName      ?? undefined,
+      projectName:     t.hrmsProjectName ?? undefined,
+      attachments:    t.attachments
+        .filter((a) => a.mimetype.startsWith("image/"))
+        .map((a) => ({ url: `${baseUrl}/uploads/${path.basename(a.filepath)}`, filename: a.filename })),
+      comments:        t.comments.map((c) => ({
+        id:          c.id,
+        content:     c.content,
+        senderType:  c.senderType,
+        authorName:  c.author.name,
+        createdAt:   c.createdAt.toISOString(),
+        attachments: c.attachments
+          .filter((a) => a.mimetype.startsWith("image/"))
+          .map((a) => ({ url: `${baseUrl}/uploads/${path.basename(a.filepath)}`, filename: a.filename })),
+      })),
+    });
+  } catch (err) {
+    console.warn("[wisework-sync] Failed to push ticket snapshot:", err instanceof Error ? err.message : String(err));
+  }
 }
 
 // All ticket routes require authentication
@@ -584,6 +649,7 @@ router.patch("/:id/assignee", async (req: Request<{ id: string }>, res: Response
         assignedByName: req.user!.name,
         description:    updated.description ?? undefined,
       });
+      void pushSyncToWisework(updated.ticketId, req.user!.name);
     }
   }
 
@@ -644,6 +710,7 @@ router.patch("/:id/status", async (req: Request<{ id: string }>, res: Response) 
   });
 
   res.json(serializeHours(updated));
+  void pushSyncToWisework(req.params.id, req.user!.name);
 });
 
 // PATCH /api/tickets/:id/type — update the category/type of a ticket
@@ -913,6 +980,95 @@ router.get("/:id/comments", async (req: Request<{ id: string }>, res: Response) 
   })));
 });
 
+// POST /api/tickets/:id/comments/wisework — WiseWork employee posts a reply (API-key auth)
+router.post("/:id/comments/wisework", async (req: Request<{ id: string }>, res: Response) => {
+  // Run multer to parse multipart/form-data (files + text fields)
+  try {
+    await runUpload(req, res);
+  } catch (err: unknown) {
+    const isMulterError = err instanceof multer.MulterError;
+    if (isMulterError && (err as multer.MulterError).code === "LIMIT_FILE_SIZE") {
+      res.status(400).json({ error: "Each image must be under 1MB" });
+      return;
+    }
+    if (isMulterError && (err as multer.MulterError).code === "LIMIT_FILE_COUNT") {
+      res.status(400).json({ error: "Maximum 5 images allowed" });
+      return;
+    }
+    res.status(400).json({ error: err instanceof Error ? err.message : "File upload error" });
+    return;
+  }
+
+  const apiKey = process.env.WISEWORK_NOTIFICATION_API_KEY ?? "";
+  if (!apiKey || req.headers["x-api-key"] !== apiKey) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const { content, authorName } = req.body as { content?: string; authorName?: string };
+  if (!content?.trim()) {
+    res.status(400).json({ error: "content is required" });
+    return;
+  }
+
+  const ticket = await prisma.ticket.findUnique({
+    where:  { ticketId: req.params.id },
+    select: { id: true, assignedTo: { select: { id: true, name: true } }, createdBy: { select: { id: true } } },
+  });
+  if (!ticket) {
+    res.status(404).json({ error: "Ticket not found" });
+    return;
+  }
+
+  const authorId = ticket.assignedTo?.id ?? ticket.createdBy.id;
+
+  const comment = await prisma.comment.create({
+    data: {
+      content:    content.trim(),
+      senderType: COMMENT_SENDER_TYPES[0], // "AGENT"
+      ticketId:   ticket.id,
+      authorId,
+    },
+    select: {
+      id:         true,
+      content:    true,
+      senderType: true,
+      author:     { select: { name: true } },
+      createdAt:  true,
+      attachments: { select: { id: true, filename: true, mimetype: true, size: true, filepath: true } },
+    },
+  });
+
+  const uploadedFiles = req.files as Express.Multer.File[] | undefined;
+  if (uploadedFiles && uploadedFiles.length > 0) {
+    await prisma.attachment.createMany({
+      data: uploadedFiles.map((f) => ({
+        id:        randomUUID(),
+        filename:  sanitizeFilename(f.originalname),
+        filepath:  f.path,
+        mimetype:  f.mimetype,
+        size:      f.size,
+        ticketId:  ticket.id,
+        commentId: comment.id,
+      })),
+    });
+  }
+
+  res.status(201).json({
+    ...comment,
+    attachments: comment.attachments.map((a) => ({
+      id:       a.id,
+      filename: a.filename,
+      mimetype: a.mimetype,
+      size:     a.size,
+      url:      "/uploads/" + path.basename(a.filepath),
+    })),
+  });
+
+  // Push updated ticket snapshot back to WiseWork
+  void pushSyncToWisework(req.params.id, authorName ?? comment.author.name);
+});
+
 // POST /api/tickets/:id/comments — create a new comment
 router.post("/:id/comments", async (req: Request<{ id: string }>, res: Response) => {
   // Run multer to parse multipart/form-data (files + text fields)
@@ -998,6 +1154,7 @@ router.post("/:id/comments", async (req: Request<{ id: string }>, res: Response)
     })),
   };
   res.status(201).json(response);
+  void pushSyncToWisework(req.params.id, req.user!.name);
 
   // Only email for tickets that originated via email webhook (hrmsClientName is null).
   // Portal tickets always set hrmsClientName; webhook tickets never do.

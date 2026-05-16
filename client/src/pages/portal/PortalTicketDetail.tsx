@@ -187,7 +187,7 @@ function CommentThread({ comments, sortAsc }: { comments: PortalComment[]; sortA
           >
             <div className="flex items-center gap-2 mb-2">
               <span className="text-sm font-semibold">
-                {comment.author?.name ?? (isCustomer ? "You" : "Support")}
+                {isCustomer ? (comment.author?.name ?? "You") : "Support Team"}
               </span>
               <Badge variant="outline" className="text-xs py-0">
                 {isCustomer ? "Customer" : "Agent"}
