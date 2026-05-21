@@ -162,6 +162,13 @@ async function pushSyncToWisework(ticketId: string, assignedByName: string): Pro
 // Registered BEFORE requireAuth so that machine-to-machine API-key calls are not
 // rejected for missing a session cookie.
 router.post("/wisework", async (req: Request, res: Response) => {
+  // API key auth must run before any other work (including multer parsing)
+  const apiKey = process.env.WISEWORK_NOTIFICATION_API_KEY ?? "";
+  if (!apiKey || req.headers["x-api-key"] !== apiKey) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+
   // Parse multipart/form-data
   try {
     await runUpload(req, res);
@@ -179,13 +186,6 @@ router.post("/wisework", async (req: Request, res: Response) => {
     return;
   }
 
-  // API key auth — same pattern as /:id/comments/wisework
-  const apiKey = process.env.WISEWORK_NOTIFICATION_API_KEY ?? "";
-  if (!apiKey || req.headers["x-api-key"] !== apiKey) {
-    res.status(401).json({ error: "Not authenticated" });
-    return;
-  }
-
   const { name, email, subject, description } = req.body as {
     name?: string; email?: string; subject?: string; description?: string;
   };
@@ -193,12 +193,17 @@ router.post("/wisework", async (req: Request, res: Response) => {
     res.status(400).json({ error: "name, email, subject, and description are required" });
     return;
   }
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRe.test(email.trim())) {
+    res.status(400).json({ error: "email is not a valid address" });
+    return;
+  }
 
   let ticket: { id: string; ticketId: string };
   try {
     // Find first ADMIN user to own the ticket (same pattern as portal route)
     const admin = await prisma.user.findFirst({
-      where:  { role: "ADMIN" },
+      where:  { role: ROLES.ADMIN },
       select: { id: true },
     });
     if (!admin) {
@@ -1095,6 +1100,13 @@ router.get("/:id/comments", async (req: Request<{ id: string }>, res: Response) 
 
 // POST /api/tickets/:id/comments/wisework — WiseWork employee posts a reply (API-key auth)
 router.post("/:id/comments/wisework", async (req: Request<{ id: string }>, res: Response) => {
+  // API key auth must run before any other work (including multer parsing)
+  const apiKey = process.env.WISEWORK_NOTIFICATION_API_KEY ?? "";
+  if (!apiKey || req.headers["x-api-key"] !== apiKey) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
   // Run multer to parse multipart/form-data (files + text fields)
   try {
     await runUpload(req, res);
@@ -1109,12 +1121,6 @@ router.post("/:id/comments/wisework", async (req: Request<{ id: string }>, res: 
       return;
     }
     res.status(400).json({ error: err instanceof Error ? err.message : "File upload error" });
-    return;
-  }
-
-  const apiKey = process.env.WISEWORK_NOTIFICATION_API_KEY ?? "";
-  if (!apiKey || req.headers["x-api-key"] !== apiKey) {
-    res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
