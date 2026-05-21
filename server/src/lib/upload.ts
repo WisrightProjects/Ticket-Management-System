@@ -8,9 +8,16 @@ import { randomUUID } from "node:crypto";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS_DIR = path.resolve(__dirname, "../../uploads");
 
+// Ensure the uploads directory exists at server startup rather than per-request,
+// so multer's destination callback never triggers an EEXIST on existing dirs.
+try {
+  mkdirSync(UPLOADS_DIR, { recursive: true });
+} catch (err: any) {
+  if (err?.code !== "EEXIST") throw err;
+}
+
 const storage = multer.diskStorage({
   destination(_req, _file, cb) {
-    mkdirSync(UPLOADS_DIR, { recursive: true });
     cb(null, UPLOADS_DIR);
   },
   filename(_req, file, cb) {

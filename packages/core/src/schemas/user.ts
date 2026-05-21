@@ -73,6 +73,8 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 // ──────────────────────────────────────
 
 export const editUserSchema = userBaseSchema.extend({
+  // .optional() is the Zod v4 way to accept undefined; z.undefined() inside
+  // a union does not work reliably with @hookform/resolvers v5 + Zod v4.
   password: z
     .union([
       z
@@ -80,8 +82,8 @@ export const editUserSchema = userBaseSchema.extend({
         .min(8, "Password must be at least 8 characters")
         .max(128, "Password must be 128 characters or fewer"),
       z.literal(""),
-      z.undefined(),
     ])
+    .optional()
     .transform((val) => (val === "" ? undefined : val)),
 });
 

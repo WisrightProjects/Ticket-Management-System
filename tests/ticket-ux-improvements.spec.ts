@@ -115,8 +115,10 @@ test.describe("REPLIES section — no duplicate description", () => {
     await page.goto(`/tickets/${ticketId}`);
     await page.waitForResponse((r) => r.url().includes(`/api/tickets/${ticketId}`) && r.status() === 200);
 
-    // The description should appear exactly once — in the DESCRIPTION section
-    const descriptionSection = page.locator("text=DESCRIPTION").locator("..");
+    // The description should appear exactly once — in the DESCRIPTION section.
+    // h3 "Description" lives inside a flex row; its grandparent wraps both
+    // that row and the bordered content box that contains the actual text.
+    const descriptionSection = page.locator("h3", { hasText: /^description$/i }).locator("../..");
     await expect(descriptionSection).toBeVisible();
     await expect(
       descriptionSection.getByText("Testing the full-screen ticket detail and replies changes.")

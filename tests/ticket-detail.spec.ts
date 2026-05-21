@@ -773,8 +773,8 @@ test.describe("Polish — API", () => {
       data:    { content: "thanks for your message we will look into it" },
       headers: { "Content-Type": "application/json", Cookie: cookie },
     });
-    // 200 = Kimi responded; 502 = Kimi unreachable in this env — both are valid outcomes
-    expect([200, 502]).toContain(res.status());
+    // 200 = Kimi responded; 502/503 = Kimi unreachable in this env — all are valid outcomes
+    expect([200, 502, 503]).toContain(res.status());
     const body = await res.json();
     if (res.status() === 200) {
       expect(typeof body.polished).toBe("string");

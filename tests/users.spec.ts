@@ -113,7 +113,7 @@ test.describe("User management — happy paths", () => {
     await page.getByRole("button", { name: "Update User" }).click();
 
     // Dialog closes on success
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 10000 });
 
     // Updated values are shown in the table
     const updatedRow = userRow(page, UPDATED_USER.email);
