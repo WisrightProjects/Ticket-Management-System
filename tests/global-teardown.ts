@@ -1,11 +1,17 @@
 import pg from "pg";
+import path from "path";
+import dotenv from "dotenv";
+
+dotenv.config({ path: path.resolve(__dirname, "../server/.env") });
+
+const testDbUrl =
+  process.env.TEST_DATABASE_URL ??
+  "postgresql://tms_user:tms_password@localhost:5433/ticket_management_test";
 
 async function globalTeardown() {
   console.log("Cleaning up test database...");
 
-  const pool = new pg.Pool({
-    connectionString: "postgresql://postgres:1234@localhost:5433/ticket_management_test",
-  });
+  const pool = new pg.Pool({ connectionString: testDbUrl });
 
   // Clean all data but keep the schema
   await pool.query(`

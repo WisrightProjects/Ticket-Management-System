@@ -14,15 +14,21 @@ async function loginAsAdmin(page: Page) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe("Internal tickets — sidebar nav", () => {
-  test("My Tickets link is visible in the sidebar after login", async ({ page }) => {
+  test("admin sees Raise Ticket in sidebar, not My Tickets", async ({ page }) => {
     await loginAsAdmin(page);
-    await expect(page.getByRole("link", { name: "My Tickets" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Raise Ticket" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "My Tickets" })).not.toBeVisible();
   });
 
-  test("clicking My Tickets navigates to /internal/tickets", async ({ page }) => {
+  test("clicking Raise Ticket navigates to /internal/submit", async ({ page }) => {
     await loginAsAdmin(page);
-    await page.getByRole("link", { name: "My Tickets" }).click();
-    await expect(page).toHaveURL("/internal/tickets");
+    await page.getByRole("link", { name: "Raise Ticket" }).click();
+    await expect(page).toHaveURL("/internal/submit");
+  });
+
+  test("admin can navigate directly to /internal/tickets", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/internal/tickets");
     await expect(page.getByRole("heading", { name: "My Tickets" })).toBeVisible();
   });
 });

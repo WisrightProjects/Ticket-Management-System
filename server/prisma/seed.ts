@@ -66,6 +66,42 @@ async function main() {
     console.log(`Admin user created (role: ${ROLES.ADMIN})`);
   }
 
+  // Test agent — used by Playwright e2e tests that require an agent login
+  const TEST_AGENT_EMAIL = "agent@wisright.com";
+  const existingTestAgent = await prisma.user.findUnique({ where: { email: TEST_AGENT_EMAIL } });
+  if (!existingTestAgent) {
+    const testAgentPassword = await hashPassword("Test@123");
+    const testAgentId = crypto.randomUUID();
+    await prisma.user.create({
+      data: {
+        id: testAgentId,
+        name: "Agent",
+        email: TEST_AGENT_EMAIL,
+        role: ROLES.AGENT,
+        emailVerified: true,
+        isActive: true,
+      },
+    });
+    await prisma.account.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId: testAgentId,
+        accountId: testAgentId,
+        providerId: "credential",
+        password: testAgentPassword,
+      },
+    });
+    console.log(`Test agent created (role: ${ROLES.AGENT})`);
+  } else {
+    // Always sync the password so a redeploy takes effect without manual DB intervention.
+    const testAgentPassword = await hashPassword("Test@123");
+    await prisma.account.updateMany({
+      where: { userId: existingTestAgent.id, providerId: "credential" },
+      data: { password: testAgentPassword },
+    });
+    console.log("Test agent already exists, password synced.");
+  }
+
   // AI agent — used as the assignee for auto-resolution attempts
   const AI_AGENT_EMAIL = "ai@system.internal";
   const existingAiAgent = await prisma.user.findUnique({ where: { email: AI_AGENT_EMAIL } });
