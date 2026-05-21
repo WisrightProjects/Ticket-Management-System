@@ -33,7 +33,7 @@ export default defineConfig({
       env: {
         ...process.env,
         PORT: "5001",
-        DATABASE_URL: "postgresql://postgres:1234@localhost:5433/ticket_management_test",
+        DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgresql://tms_user:tms_password@localhost:5433/ticket_management_test",
         BETTER_AUTH_SECRET: "test-secret-only-for-testing-do-not-use-in-production-abcdef1234567890",
         BETTER_AUTH_URL: "http://localhost:5001",
         CLIENT_URL: "http://localhost:5175",
