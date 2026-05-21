@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios, { AxiosError } from "axios";
@@ -65,7 +66,9 @@ function Users() {
   const PAGE_SIZE = 10;
 
   // Single form instance for both create and edit — editUserSchema covers both
-  const form = useForm<UserForm>({
+  // TFieldValues = z.input (password?: string), TTransformedValues = UserForm (password: string | undefined)
+  // This matches zodResolver's generic signature: Resolver<z.input<T>, unknown, z.output<T>>
+  const form = useForm<z.input<typeof editUserSchema>, unknown, UserForm>({
     resolver: zodResolver(editUserSchema),
     defaultValues: { name: "", email: "", password: "", role: ROLES.AGENT },
     mode: "onBlur",
