@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { useSession } from "@/lib/auth-client";
+import { useSession, signOut } from "@/lib/auth-client";
 import { ROLES, type UserRole } from "@tms/core";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -35,6 +35,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Browser was closed and reopened — sessionStorage cleared, force re-login
+  if (!sessionStorage.getItem("tms_active")) {
+    void signOut();
     return <Navigate to="/login" replace />;
   }
 

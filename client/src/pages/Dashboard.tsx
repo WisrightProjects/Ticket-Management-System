@@ -47,6 +47,7 @@ interface RecentActivityItem {
   ticketId:   string;
   title:      string;
   status:     string;
+  project:    string | null;
   updatedAt:  string;
   assignedTo: string | null;
 }
@@ -552,6 +553,12 @@ function Dashboard() {
                       <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                         {STATUS_LABELS[item.status] ?? item.status}
                       </span>
+                      {item.project === "WiseWork Support" && (
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium"
+                          style={{ background: "#fff3e0", color: "#e65100" }}>
+                          WiseWork
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-foreground mt-0.5 truncate">{item.title}</p>
                     {item.assignedTo && (

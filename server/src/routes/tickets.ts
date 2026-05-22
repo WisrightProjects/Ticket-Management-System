@@ -10,7 +10,7 @@ import { requireAuth } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import { ticketQuerySchema, assignTicketSchema, updateStatusSchema, updateTypeSchema, updatePrioritySchema, updateEstimatedHoursSchema, updateActualHoursSchema, createCommentSchema, polishReplySchema, implementationPlanSchema, requestMoreInfoSchema, STATUS, TICKET_TYPE, ROLES, COMMENT_SENDER_TYPES } from "@tms/core";
 import { Prisma } from "../generated/prisma/client.js";
-import { sendReplyEmail, sendImplementationPlanPostedEmail, sendImplementationMoreInfoRequestedEmail } from "../lib/mailer.js";
+import { sendReplyEmail, sendImplementationPlanPostedEmail, sendImplementationMoreInfoRequestedEmail, sendNewTicketNotificationEmail } from "../lib/mailer.js";
 import { notifyWiseworkAssignment, notifyWiseworkPriorityUpdate, syncTicketToWisework } from "../lib/wisework-notifier.js";
 import { getAllClients, getClientProjects, getEmployeeDirectory, getProjectEmployees, type HrmsEmployee } from "../lib/hrms.js";
 import { uploadArray } from "../lib/upload.js";
@@ -200,16 +200,18 @@ router.post("/wisework", async (req: Request, res: Response) => {
   }
 
   let ticket: { id: string; ticketId: string };
+  let adminEmail: string | null = null;
   try {
     // Find first ADMIN user to own the ticket (same pattern as portal route)
     const admin = await prisma.user.findFirst({
       where:  { role: ROLES.ADMIN },
-      select: { id: true },
+      select: { id: true, email: true },
     });
     if (!admin) {
       res.status(500).json({ error: "No admin user found" });
       return;
     }
+    adminEmail = admin.email ?? null;
 
     // Generate ticketId using the same race-safe transaction pattern as portal.ts:
     // find the highest existing TKT-NNNN, increment, format with leading zeros.
@@ -274,6 +276,16 @@ router.post("/wisework", async (req: Request, res: Response) => {
   res.status(201).json({ ticketId: ticket.ticketId });
 
   void pushSyncToWisework(ticket.ticketId, name.trim());
+
+  if (adminEmail) {
+    void sendNewTicketNotificationEmail({
+      adminEmail,
+      ticketId:     ticket.ticketId,
+      customerName: name.trim(),
+      title:        subject.trim(),
+      source:       "WiseWork Support",
+    }).catch((err) => console.error("[mailer] new-ticket-notify failed:", err));
+  }
 });
 
 // All ticket routes require authentication
@@ -570,6 +582,7 @@ router.get("/stats", async (req, res) => {
         ticketId:   true,
         title:      true,
         status:     true,
+        project:    true,
         updatedAt:  true,
         assignedTo: { select: { name: true } },
       },
@@ -699,6 +712,7 @@ router.get("/stats", async (req, res) => {
       ticketId:   t.ticketId,
       title:      t.title,
       status:     t.status,
+      project:    t.project,
       updatedAt:  t.updatedAt.toISOString(),
       assignedTo: t.assignedTo?.name ?? null,
     })),

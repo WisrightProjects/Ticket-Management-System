@@ -25,8 +25,8 @@ export const auth = betterAuth({
     },
   },
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24,     // refresh daily
+    expiresIn: 60 * 60 * 24,    // 24 hours — client-side sessionStorage enforces login-on-browser-open
+    updateAge: 60 * 60 * 4,     // refresh every 4 hours while active
   },
   rateLimit: {
     enabled: process.env.NODE_ENV !== "test",  // enforce in dev too — disabled only in test

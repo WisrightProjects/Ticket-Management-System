@@ -41,6 +41,7 @@ function Login() {
       return;
     }
 
+    sessionStorage.setItem("tms_active", "1");
     navigate("/");
   };
 
