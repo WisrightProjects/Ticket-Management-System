@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useSession, signOut } from "@/lib/auth-client";
 import { ROLES, type UserRole } from "@tms/core";
@@ -26,6 +27,13 @@ import InternalTicketDetail from "@/pages/internal/InternalTicketDetail";
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession();
 
+  // Sign out the stale server session once — must be in useEffect, never in render
+  useEffect(() => {
+    if (!isPending && session && !sessionStorage.getItem("tms_active")) {
+      void signOut();
+    }
+  }, [isPending, session]);
+
   if (isPending) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -34,13 +42,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Browser was closed and reopened — sessionStorage cleared, force re-login
-  if (!sessionStorage.getItem("tms_active")) {
-    void signOut();
+  if (!session || !sessionStorage.getItem("tms_active")) {
     return <Navigate to="/login" replace />;
   }
 
