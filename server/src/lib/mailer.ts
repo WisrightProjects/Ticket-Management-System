@@ -194,6 +194,53 @@ export async function sendImplementationRequestSubmittedEmail(
   }
 }
 
+export interface SendNewTicketNotificationEmailOptions {
+  adminEmail:   string;
+  ticketId:     string;
+  customerName: string;
+  title:        string;
+  source:       string;
+}
+
+export async function sendNewTicketNotificationEmail(
+  opts: SendNewTicketNotificationEmailOptions,
+): Promise<void> {
+  const { adminEmail, ticketId, customerName, title, source } = opts;
+  if (!adminEmail)     return;
+  if (!isConfigured()) return;
+
+  const safeCustomer = stripCrlf(customerName);
+  const safeTitle    = stripCrlf(title);
+  const link         = `${appBaseUrl()}/tickets/${ticketId}`;
+  const subject      = `[${ticketId}] New ticket: ${safeTitle}`;
+  const text = [
+    `${safeCustomer} submitted a new support ticket.`,
+    "",
+    `Ticket:  ${ticketId}`,
+    `Title:   ${safeTitle}`,
+    `Source:  ${source}`,
+    "",
+    `Open in admin: ${link}`,
+  ].join("\n");
+
+  try {
+    await getTransporter().sendMail({
+      from: GMAIL_USER,
+      to:   adminEmail,
+      subject,
+      text,
+    });
+    console.log(`[mailer] New ticket email sent for ${ticketId}`);
+  } catch (err) {
+    console.error(
+      "[mailer] Failed to send new ticket email for",
+      ticketId,
+      ":",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
 export interface SendImplementationPlanPostedEmailOptions {
   customerEmail: string;
   ticketId:      string;
