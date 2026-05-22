@@ -11,6 +11,7 @@ function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const isAdmin = (session?.user as { role: UserRole } | undefined)?.role === ROLES.ADMIN;
 
   const handleSignOut = async () => {
+    sessionStorage.removeItem("tms_active");
     await signOut();
     navigate("/login");
   };
