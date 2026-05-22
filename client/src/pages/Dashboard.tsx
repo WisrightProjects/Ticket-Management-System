@@ -43,7 +43,13 @@ interface ClientRecentTicket {
   clientName: string;
 }
 
-
+interface RecentActivityItem {
+  ticketId:   string;
+  title:      string;
+  status:     string;
+  updatedAt:  string;
+  assignedTo: string | null;
+}
 
 interface StatusBreakdown { status: string; count: number; }
 interface PriorityBreakdown { priority: string; count: number; }
@@ -69,6 +75,7 @@ interface DashboardStats {
   dailyCounts:        Array<{ date: string; count: number }>;
   agentWorkload:      AgentWorkload[];
   clientRecentTickets: ClientRecentTicket[];
+  recentActivity:     RecentActivityItem[];
   statusBreakdown:    StatusBreakdown[];
   priorityBreakdown:  PriorityBreakdown[];
   newRequirementsTotal: number;
@@ -521,6 +528,45 @@ function Dashboard() {
           </Card>
         </div>
       </div>
+
+      {/* ── Recent Activity (all tickets, including WiseWork support) ── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-6 space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : !stats?.recentActivity?.length ? (
+            <p className="px-6 py-4 text-sm text-muted-foreground">No recent activity.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {stats.recentActivity.map((item) => (
+                <li key={item.ticketId} className="flex items-start gap-3 px-4 py-3 hover:bg-muted transition-colors">
+                  <span className={`mt-1.5 flex-shrink-0 w-2 h-2 rounded-full ${STATUS_DOT[item.status] ?? "bg-gray-400"}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs text-muted-foreground">{item.ticketId}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        {STATUS_LABELS[item.status] ?? item.status}
+                      </span>
+                    </div>
+                    <p className="text-sm text-foreground mt-0.5 truncate">{item.title}</p>
+                    {item.assignedTo && (
+                      <p className="text-xs text-muted-foreground mt-0.5">→ {item.assignedTo}</p>
+                    )}
+                  </div>
+                  <span className="flex-shrink-0 text-xs text-muted-foreground whitespace-nowrap">
+                    {timeAgo(item.updatedAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Secondary Stats Row ── */}
       {!isLoading && stats && (
