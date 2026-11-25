@@ -30,6 +30,10 @@ model User {
   createdTickets  Ticket[]        @relation("CreatedTickets")
   comments        Comment[]
   history         TicketHistory[]
+  memberships     OrganizationMembership[]
+  requestedTickets Ticket[] @relation("RequestedTickets")
+  teamMemberships TeamMember[]
+  queueViews QueueView[]
 
   @@map("user")
 }
@@ -146,11 +150,29 @@ model Ticket {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  requesterId String?
+  requester User? @relation("RequestedTickets", fields: [requesterId], references: [id])
+  firstResponseAt DateTime?
+  resolvedAt DateTime?
+  closedAt DateTime?
+  aiResolved Boolean @default(false)
+  submissionKey String? @unique
+  resolutionSummary String?
+  teamId String?
+  team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  dueAt DateTime?
 
   attachments Attachment[]
   comments    Comment[]
   history     TicketHistory[]
   implementationRequest ImplementationRequest?
+
+  @@index([organizationId, requesterId])
+  @@index([teamId, status])
+  @@index([assignedToId, status])
+  @@index([dueAt, status])
 
   @@map("tickets")
 }
@@ -167,6 +189,7 @@ enum CommentSenderType {
 model Comment {
   id         String            @id @default(uuid())
   content    String
+  isInternal Boolean @default(false)
   senderType CommentSenderType @default(AGENT)
 
   ticket   Ticket @relation(fields: [ticketId], references: [id])
@@ -242,4 +265,69 @@ model ImplementationRequest {
   updatedAt                DateTime @updatedAt
 
   @@map("implementation_requests")
+}
+
+model Organization {
+  id String @id @default(uuid())
+  name String
+  slug String @unique
+  hrmsClientId String? @unique
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  memberships OrganizationMembership[]
+  invitations CustomerInvitation[]
+  tickets Ticket[]
+}
+
+model OrganizationMembership {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role String @default("MEMBER")
+  createdAt DateTime @default(now())
+  @@unique([userId, organizationId])
+}
+
+model CustomerInvitation {
+  id String @id @default(uuid())
+  email String
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role String @default("MEMBER")
+  tokenHash String @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([organizationId, email])
+}
+
+model Team {
+  id String @id @default(uuid())
+  name String @unique
+  createdAt DateTime @default(now())
+  members TeamMember[]
+  tickets Ticket[]
+}
+
+model TeamMember {
+  id String @id @default(uuid())
+  teamId String
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model QueueView {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  filters Json
+  createdAt DateTime @default(now())
+  @@unique([userId, name])
 }
