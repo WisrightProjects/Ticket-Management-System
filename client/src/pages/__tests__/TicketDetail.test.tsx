@@ -279,7 +279,7 @@ describe("TicketDetail — ticket data rendering", () => {
   it("shows the Description section with the ticket body", async () => {
     renderDetail();
     await screen.findByText("TKT-0001");
-    expect(screen.getByText("Description")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Description" })).toBeInTheDocument();
     // The description text appears in both TicketDetail and the TicketReplies first bubble
     expect(
       screen.getAllByText(/Users on floor 3 cannot reach the internal wiki/i).length
