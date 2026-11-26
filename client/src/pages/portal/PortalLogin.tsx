@@ -108,9 +108,9 @@ function SignInForm({ defaultEmail = "" }: { defaultEmail?: string }) {
           <Label htmlFor="signin-password">Password</Label>
           <Link
             to="/portal/forgot-password"
-            style={{ fontSize:"12px", color:"#ca8a04", fontWeight:600, textDecoration:"none" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#990000"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#ca8a04"; }}
+            style={{ fontSize:"12px", color:"var(--primary)", fontWeight:600, textDecoration:"none" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--rt-accent-hover)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--primary)"; }}
           >
             Forgot password?
           </Link>
@@ -138,7 +138,7 @@ function SignInForm({ defaultEmail = "" }: { defaultEmail?: string }) {
       </div>
 
       <button type="submit" disabled={isSubmitting}
-        style={{ width:"100%", height:"44px", borderRadius:"10px", marginTop:"4px", background:"linear-gradient(135deg, #0a0000 0%, #990000 50%, #cc0000 100%)", color:"#ffffff", fontWeight:700, fontSize:"14px", border:"none", cursor:isSubmitting ? "not-allowed" : "pointer", boxShadow:"0 4px 16px rgba(204,0,0,0.35)", transition:"all 0.2s", opacity:isSubmitting ? 0.75 : 1 }}
+        style={{ width:"100%", height:"44px", borderRadius:"10px", marginTop:"4px", background:"var(--primary)", color:"#ffffff", fontWeight:700, fontSize:"14px", border:"none", cursor:isSubmitting ? "not-allowed" : "pointer", boxShadow:"0 4px 16px rgba(204,0,0,0.35)", transition:"all 0.2s", opacity:isSubmitting ? 0.75 : 1 }}
         onMouseEnter={(e) => { if (!isSubmitting) { (e.currentTarget as HTMLElement).style.boxShadow="0 4px 20px rgba(202,138,4,0.4)"; (e.currentTarget as HTMLElement).style.transform="translateY(-1px)"; }}}
         onMouseLeave={(e) => { if (!isSubmitting) { (e.currentTarget as HTMLElement).style.boxShadow="0 4px 16px rgba(204,0,0,0.35)"; (e.currentTarget as HTMLElement).style.transform="translateY(0)"; }}}>
         {isSubmitting ? "Signing in…" : "Sign In"}
@@ -285,7 +285,7 @@ function SignUpForm({ defaultName = "", defaultEmail = "", clientId = "" }: { de
       </div>
 
       <button type="submit" disabled={isSubmitting}
-        style={{ width:"100%", height:"44px", borderRadius:"10px", marginTop:"4px", background:"linear-gradient(135deg, #0a0000 0%, #990000 50%, #cc0000 100%)", color:"#ffffff", fontWeight:700, fontSize:"14px", border:"none", cursor:isSubmitting ? "not-allowed" : "pointer", boxShadow:"0 4px 16px rgba(204,0,0,0.35)", transition:"all 0.2s", opacity:isSubmitting ? 0.75 : 1 }}
+        style={{ width:"100%", height:"44px", borderRadius:"10px", marginTop:"4px", background:"var(--primary)", color:"#ffffff", fontWeight:700, fontSize:"14px", border:"none", cursor:isSubmitting ? "not-allowed" : "pointer", boxShadow:"0 4px 16px rgba(204,0,0,0.35)", transition:"all 0.2s", opacity:isSubmitting ? 0.75 : 1 }}
         onMouseEnter={(e) => { if (!isSubmitting) { (e.currentTarget as HTMLElement).style.boxShadow="0 4px 20px rgba(202,138,4,0.4)"; (e.currentTarget as HTMLElement).style.transform="translateY(-1px)"; }}}
         onMouseLeave={(e) => { if (!isSubmitting) { (e.currentTarget as HTMLElement).style.boxShadow="0 4px 16px rgba(204,0,0,0.35)"; (e.currentTarget as HTMLElement).style.transform="translateY(0)"; }}}>
         {isSubmitting ? "Creating account…" : "Create Account"}
@@ -355,7 +355,7 @@ export default function PortalLogin() {
         className="hidden md:flex flex-col items-center justify-center"
         style={{
           width: "45%", flexShrink: 0,
-          background: "linear-gradient(160deg, #0a0000 0%, #660000 30%, #990000 65%, #cc0000 100%)",
+          background: "var(--rt-header-gradient)",
           padding: "48px", position: "relative", overflow: "hidden",
         }}
       >
@@ -367,7 +367,7 @@ export default function PortalLogin() {
         <div style={{ position:"relative", zIndex:1, textAlign:"center", maxWidth:"360px" }}>
           {/* Logo */}
           <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.95)", borderRadius:"20px", padding:"20px 32px", marginBottom:"32px", boxShadow:"0 8px 32px rgba(0,0,0,0.4), 0 0 0 2px rgba(202,138,4,0.4)" }}>
-            <img src="/wisright-logo.png" alt="WisRight" style={{ height:"52px", width:"auto" }} />
+            <img src="/right-tracker-logo.png" alt="Right Tracker" style={{ height:"52px", width:"auto" }} />
           </div>
 
           <h1 style={{ color:"#ffffff", fontSize:"30px", fontWeight:800, margin:"0 0 6px", letterSpacing:"-0.5px" }}>
@@ -377,7 +377,7 @@ export default function PortalLogin() {
             Customer Portal
           </p>
           {/* Gold underline */}
-          <div style={{ width:"60px", height:"3px", background:"linear-gradient(90deg, #ca8a04, #fbbf24)", borderRadius:"2px", margin:"0 auto 18px" }} />
+          <div style={{ width:"60px", height:"3px", background:"var(--rt-active-indicator)", borderRadius:"2px", margin:"0 auto 18px" }} />
 
           <p style={{ color:"rgba(255,255,255,0.72)", fontSize:"14px", lineHeight:1.7, margin:"0 0 28px" }}>
             Submit, track and follow up on your support requests — all in one place.
@@ -386,20 +386,20 @@ export default function PortalLogin() {
           {portalInfo?.customerName && (
             <div style={{ background:"rgba(0,0,0,0.3)", borderRadius:"12px", padding:"14px 20px", border:"1px solid rgba(202,138,4,0.30)", marginBottom:"8px" }}>
               <p style={{ color:"rgba(255,255,255,0.55)", fontSize:"11px", fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase", margin:"0 0 4px" }}>You are accessing</p>
-              <p style={{ color:"#fbbf24", fontSize:"16px", fontWeight:700, margin:0 }}>{portalInfo.customerName}</p>
+              <p style={{ color:"#ffd3d7", fontSize:"16px", fontWeight:700, margin:0 }}>{portalInfo.customerName}</p>
             </div>
           )}
         </div>
       </div>
 
       {/* ── Right form panel ── */}
-      <div className="flex flex-col items-center justify-center" style={{ flex:1, background:"#fff9f9" }}>
+      <div className="flex flex-col items-center justify-center" style={{ flex:1, background:"var(--background)" }}>
 
         {/* Mobile-only red branding header */}
         <div
           className="flex md:hidden flex-col items-center justify-center w-full"
           style={{
-            background: "linear-gradient(160deg, #0a0000 0%, #660000 30%, #990000 65%, #cc0000 100%)",
+            background: "var(--rt-header-gradient)",
             padding: "32px 24px",
             position: "relative",
             overflow: "hidden",
@@ -410,13 +410,13 @@ export default function PortalLogin() {
 
           <div style={{ position:"relative", zIndex:1, textAlign:"center" }}>
             <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.95)", borderRadius:"16px", padding:"14px 24px", marginBottom:"20px", boxShadow:"0 8px 32px rgba(0,0,0,0.4), 0 0 0 2px rgba(202,138,4,0.4)" }}>
-              <img src="/wisright-logo.png" alt="Right Tracker" style={{ height:"40px", width:"auto" }} />
+              <img src="/right-tracker-logo.png" alt="Right Tracker" style={{ height:"40px", width:"auto" }} />
             </div>
             <h1 style={{ color:"#ffffff", fontSize:"22px", fontWeight:800, margin:"0 0 4px", letterSpacing:"-0.3px" }}>Right Tracker</h1>
             <p style={{ color:"rgba(202,138,4,0.9)", fontSize:"11px", fontWeight:600, letterSpacing:"0.12em", margin:"0 0 10px", textTransform:"uppercase" }}>
               Customer Portal
             </p>
-            <div style={{ width:"48px", height:"3px", background:"linear-gradient(90deg, #ca8a04, #fbbf24)", borderRadius:"2px", margin:"0 auto" }} />
+            <div style={{ width:"48px", height:"3px", background:"var(--rt-active-indicator)", borderRadius:"2px", margin:"0 auto" }} />
             {portalInfo?.customerName && (
               <p style={{ color:"rgba(255,255,255,0.85)", fontSize:"13px", fontWeight:600, marginTop:"12px" }}>{portalInfo.customerName}</p>
             )}
@@ -443,10 +443,10 @@ export default function PortalLogin() {
 
           <div style={{ background:"#ffffff", borderRadius:"20px", padding:"clamp(24px, 5vw, 40px)", boxShadow:"0 4px 24px rgba(204,0,0,0.10), 0 1px 3px rgba(0,0,0,0.05)" }}>
             {/* Gold top bar */}
-            <div style={{ height:"4px", background:"linear-gradient(90deg, #0a0000, #990000, #cc0000)", margin:"calc(-1 * clamp(24px, 5vw, 40px)) calc(-1 * clamp(24px, 5vw, 40px)) 32px", borderTopLeftRadius:"20px", borderTopRightRadius:"20px" }} />
+            <div style={{ height:"4px", background:"var(--rt-header-gradient)", margin:"calc(-1 * clamp(24px, 5vw, 40px)) calc(-1 * clamp(24px, 5vw, 40px)) 32px", borderTopLeftRadius:"20px", borderTopRightRadius:"20px" }} />
 
             <div style={{ marginBottom:"24px" }}>
-              <h2 style={{ fontSize:"22px", fontWeight:800, color:"#1a0000", margin:"0 0 4px", letterSpacing:"-0.3px" }}>
+              <h2 style={{ fontSize:"22px", fontWeight:800, color:"var(--foreground)", margin:"0 0 4px", letterSpacing:"-0.3px" }}>
                 {activeTab === "signin" ? "Welcome back" : "Create your account"}
               </h2>
               <p style={{ color:"#6b7280", fontSize:"13px", margin:0 }}>
@@ -468,7 +468,7 @@ export default function PortalLogin() {
                       flex:1, padding:"8px", borderRadius:"8px", border:"none", cursor:"pointer",
                       fontSize:"13px", fontWeight:600, transition:"all 0.15s",
                       background: activeTab === tab ? "#ffffff" : "transparent",
-                      color: activeTab === tab ? "#1a0000" : "#6b7280",
+                      color: activeTab === tab ? "var(--foreground)" : "#6b7280",
                       boxShadow: activeTab === tab ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                     }}
                   >
@@ -486,7 +486,7 @@ export default function PortalLogin() {
             <div style={{ marginTop:"20px", paddingTop:"16px", borderTop:"1px solid #f3f4f6", textAlign:"center" }}>
               <Link
                 to={`/portal/${slug}/submit`}
-                style={{ fontSize:"13px", color:"#990000", textDecoration:"none", fontWeight:500 }}
+                style={{ fontSize:"13px", color:"var(--rt-accent-hover)", textDecoration:"none", fontWeight:500 }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "underline"; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.textDecoration = "none"; }}
               >

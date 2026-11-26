@@ -26,6 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/PageHeader";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { STATUS_CONFIG, TYPE_CONFIG } from "@/lib/status-config";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -80,22 +83,6 @@ const STATUS_LABELS: Record<string, string> = {
   OPEN_QA:          "QA",
   OPEN_DONE:        "Done",
   CLOSED:           "Closed",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  UN_ASSIGNED:      "#6B7280",
-  OPEN_NOT_STARTED: "#F59E0B",
-  OPEN_IN_PROGRESS: "#3B82F6",
-  OPEN_QA:          "#8B5CF6",
-  OPEN_DONE:        "#14B8A6",
-  CLOSED:           "#22C55E",
-};
-
-const TYPE_COLORS: Record<string, string> = {
-  BUG:         "#EF4444",
-  TASK:        "#3B82F6",
-  SUPPORT:     "#8B5CF6",
-  REQUIREMENT: "#F59E0B",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -198,9 +185,7 @@ export default function AgentDetail() {
   if (isError || !data) {
     return (
       <div className="px-4 sm:px-6 py-6 sm:py-8">
-        <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-md">
-          Failed to load agent data. Please refresh the page.
-        </div>
+        <ErrorBanner message="Failed to load agent data. Please refresh the page." />
       </div>
     );
   }
@@ -212,7 +197,7 @@ export default function AgentDetail() {
   const statusChartData = byStatus.map((s) => ({
     status: STATUS_LABELS[s.status] ?? s.status,
     count:  s.count,
-    fill:   STATUS_COLORS[s.status] ?? "#6B7280",
+    fill:   STATUS_CONFIG[s.status]?.dot ?? STATUS_CONFIG.UN_ASSIGNED.dot,
     rawStatus: s.status,
   }));
 
@@ -224,7 +209,7 @@ export default function AgentDetail() {
   const typeChartData = byType.map((t) => ({
     type:  t.type,
     count: t.count,
-    fill:  TYPE_COLORS[t.type] ?? "#9CA3AF",
+    fill:  TYPE_CONFIG[t.type]?.dot ?? TYPE_CONFIG.TASK.dot,
   }));
 
   return (
@@ -235,57 +220,46 @@ export default function AgentDetail() {
         {/* Back link */}
         <Link
           to="/users"
-          className="inline-flex items-center gap-1.5 text-sm mb-4 hover:underline"
-          style={{ color: "var(--rt-accent)" }}
+          className="inline-flex items-center gap-1.5 text-sm mb-4 hover:underline text-[var(--rt-accent)]"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Users
         </Link>
 
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: "var(--rt-text-1)" }}>
-                {user.name}
-              </h1>
-              <Badge
-                variant={user.role === ROLES.ADMIN ? "default" : "secondary"}
-                style={
-                  user.role === ROLES.ADMIN
-                    ? { background: "#F97316", color: "#fff" }
-                    : undefined
-                }
-              >
+        <PageHeader
+          className="mb-0"
+          title={
+            <>
+              {user.name}
+              <Badge variant={user.role === ROLES.ADMIN ? "default" : "secondary"}>
                 {user.role}
               </Badge>
+            </>
+          }
+          subtitle={user.email}
+          actions={
+            <div className="flex items-center gap-2 no-print">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5"
+              >
+                <Printer className="h-4 w-4" />
+                Print Report
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportCSV(recentTickets, user.name)}
+                className="flex items-center gap-1.5"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
             </div>
-            <p className="mt-1 text-sm" style={{ color: "var(--rt-text-2)" }}>
-              {user.email}
-            </p>
-          </div>
-
-          {/* Action buttons — hidden on print */}
-          <div className="flex items-center gap-2 no-print">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.print()}
-              className="flex items-center gap-1.5"
-            >
-              <Printer className="h-4 w-4" />
-              Print Report
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportCSV(recentTickets, user.name)}
-              className="flex items-center gap-1.5"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
-            </Button>
-          </div>
-        </div>
+          }
+        />
       </div>
 
       {/* ── B. KPI Cards ─────────────────────────────────────────────────────── */}
@@ -328,8 +302,8 @@ export default function AgentDetail() {
                 />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="opened" fill="#3B82F6" radius={[3, 3, 0, 0]} name="Opened" />
-                <Bar dataKey="closed" fill="#22C55E" radius={[3, 3, 0, 0]} name="Closed" />
+                <Bar dataKey="opened" fill={STATUS_CONFIG.OPEN_IN_PROGRESS.dot} radius={[3, 3, 0, 0]} name="Opened" />
+                <Bar dataKey="closed" fill={STATUS_CONFIG.CLOSED.dot} radius={[3, 3, 0, 0]} name="Closed" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -423,7 +397,7 @@ export default function AgentDetail() {
                   width={100}
                 />
                 <Tooltip />
-                <Bar dataKey="count" fill="#F97316" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" fill="var(--rt-accent)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -507,7 +481,7 @@ export default function AgentDetail() {
                   </TableRow>
                 ) : (
                   recentTickets.map((ticket) => {
-                    const statusColor = STATUS_COLORS[ticket.status] ?? "#6B7280";
+                    const statusCfg = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.UN_ASSIGNED;
                     return (
                       <TableRow key={ticket.ticketId}>
                         <TableCell className="font-mono text-xs" style={{ color: "var(--rt-text-2)" }}>
@@ -523,10 +497,7 @@ export default function AgentDetail() {
                         <TableCell>
                           <span
                             className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                            style={{
-                              background: `${statusColor}18`,
-                              color: statusColor,
-                            }}
+                            style={{ background: statusCfg.bg, color: statusCfg.text }}
                           >
                             {STATUS_LABELS[ticket.status] ?? ticket.status}
                           </span>

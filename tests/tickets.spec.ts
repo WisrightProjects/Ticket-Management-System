@@ -476,13 +476,18 @@ async function mockTicketsApiWithData(page: Page) {
     lastCustomerReplyAt: null,
     attachments:        [],
   };
-  await page.route(/\/api\/tickets(\?.*)?$/, (route) =>
+  // The board fires one request per priority column — only fulfill the mock
+  // ticket's own column (HIGH), empty envelopes for the other 3.
+  await page.route(/\/api\/tickets(\?.*)?$/, (route) => {
+    const url = new URL(route.request().url());
+    const matches = url.searchParams.get("priority") === mockTicket.priority;
+    const data = matches ? [mockTicket] : [];
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ data: [mockTicket], total: 1, page: 1, pageSize: 10, totalPages: 1 }),
-    })
-  );
+      body: JSON.stringify({ data, total: data.length, page: 1, pageSize: 10, totalPages: 1 }),
+    });
+  });
   await page.route(/\/api\/tickets\/assignable-users/, (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) })
   );
@@ -498,44 +503,45 @@ test.describe("Ticket list slide panel", () => {
     await goToTicketsPage(page);
   });
 
-  test("clicking a non-link cell navigates to the ticket detail page", async ({ page }) => {
-    const firstRow = page.locator("tbody tr").first();
-    await firstRow.waitFor({ state: "visible" });
-    // Click the Sender cell (no link inside) — row click should navigate
-    await firstRow.locator("td").nth(2).click();
+  test("clicking a non-action area of the card navigates to the ticket detail page", async ({ page }) => {
+    const firstCard = page.getByTestId("ticket-card").first();
+    await firstCard.waitFor({ state: "visible" });
+    // The whole card is a link; click the title text (not the quick-view button) — should navigate
+    await firstCard.getByText("Backend Admin - AI Reports are not accurate").click();
     await expect(page).toHaveURL(/\/tickets\/TKT-0001/);
   });
 
   test("clicking the eye icon opens the slide panel", async ({ page }) => {
-    const firstRow = page.locator("tbody tr").first();
-    await firstRow.waitFor({ state: "visible" });
-    // Eye icon is the Quick view button in the last actions column
-    await firstRow.getByRole("button", { name: "Quick view" }).click();
+    const firstCard = page.getByTestId("ticket-card").first();
+    await firstCard.waitFor({ state: "visible" });
+    await firstCard.getByTestId("ticket-card-quickview").click();
     // Panel content renders only when open (conditional rendering)
     await expect(page.getByText("Open Full Ticket")).toBeVisible();
   });
 
   test("panel shows ticket metadata unique to the panel", async ({ page }) => {
-    const firstRow = page.locator("tbody tr").first();
-    await firstRow.waitFor({ state: "visible" });
-    await firstRow.getByRole("button", { name: "Quick view" }).click();
-    // Assignee name appears only in the panel MetaRow, not in the table
+    const firstCard = page.getByTestId("ticket-card").first();
+    await firstCard.waitFor({ state: "visible" });
+    await firstCard.getByTestId("ticket-card-quickview").click();
+    // Assignee name appears only in the panel MetaRow, not on the card
     await expect(page.getByText("Yuvaraj Pandian")).toBeVisible();
   });
 
   test("clicking X button closes the panel", async ({ page }) => {
-    const firstRow = page.locator("tbody tr").first();
-    await firstRow.waitFor({ state: "visible" });
-    await firstRow.getByRole("button", { name: "Quick view" }).click();
+    const firstCard = page.getByTestId("ticket-card").first();
+    await firstCard.waitFor({ state: "visible" });
+    await firstCard.getByTestId("ticket-card-quickview").click();
     await expect(page.getByText("Open Full Ticket")).toBeVisible();
     // Click the close (X) button — it's inside the panel header
     await page.getByRole("button").filter({ has: page.locator("svg") }).last().click();
     await expect(page.getByText("Open Full Ticket")).not.toBeVisible();
   });
 
-  test("clicking the ticket ID link navigates to the ticket detail page", async ({ page }) => {
-    const idLink = page.getByRole("link", { name: "TKT-0001" }).first();
-    await idLink.click();
+  test("clicking the ticket card navigates to the ticket detail page", async ({ page }) => {
+    // The ticketId is no longer its own separate link — the whole card is the link now.
+    const firstCard = page.getByTestId("ticket-card").first();
+    await firstCard.waitFor({ state: "visible" });
+    await firstCard.click();
     await expect(page).not.toHaveURL("/tickets");
   });
 });

@@ -7,7 +7,7 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <div className="rt-app-workspace flex min-h-screen flex-col">
       <Navbar onMenuClick={() => setSidebarOpen((o) => !o)} />
       <div style={{ display: "flex", flex: 1, position: "relative" }}>
         {/* Mobile backdrop */}

@@ -10,7 +10,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ImageUploadField } from "@/components/portal/ImageUploadField";
-import { statusVariant, STATUS_LABELS } from "@/lib/ticket-badges";
+import { CUSTOMER_STATUS } from "@/lib/customer-status";
+import { STATUS_CONFIG } from "@/lib/status-config";
+import { TicketPill } from "@/components/TicketPill";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { ImplementationStatusPanel, type ImplementationRequestData } from "@/components/ImplementationStatusPanel";
 import { DetailRow } from "@/components/DetailRow";
 
@@ -58,7 +61,7 @@ type PortalComment = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function statusLabel(status: string): string {
-  return STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status;
+  return CUSTOMER_STATUS[status] ?? status;
 }
 
 function formatDate(iso: string): string {
@@ -205,7 +208,7 @@ function CommentThread({ comments, sortAsc }: { comments: PortalComment[]; sortA
                     href={att.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group relative block w-16 h-16 rounded overflow-hidden border border-gray-200 hover:border-orange-400 transition-colors"
+                    className="group relative block w-16 h-16 rounded overflow-hidden border border-gray-200 hover:border-[var(--rt-accent)] transition-colors"
                     title={att.filename}
                   >
                     <img src={att.url} alt={att.filename} className="w-full h-full object-cover" loading="lazy" />
@@ -295,9 +298,7 @@ export default function PortalTicketDetail() {
   if (ticketError || !ticket) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-8">
-        <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-md">
-          Failed to load ticket. Please go back and try again.
-        </div>
+        <ErrorBanner message="Failed to load ticket. Please go back and try again." />
       </div>
     );
   }
@@ -321,7 +322,7 @@ export default function PortalTicketDetail() {
             <div className="flex items-center gap-3 mb-2">
               <span className="font-mono text-sm text-muted-foreground">{ticket.ticketId}</span>
               <div className="flex gap-2">
-                <Badge variant={statusVariant(ticket.status as Parameters<typeof statusVariant>[0])}>{statusLabel(ticket.status)}</Badge>
+                <TicketPill label={statusLabel(ticket.status)} cfg={STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.CLOSED} />
               </div>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold">{ticket.title}</h2>
@@ -336,7 +337,7 @@ export default function PortalTicketDetail() {
               {ticket.senderName ?? ticket.senderEmail}
             </DetailRow>
             <DetailRow label="Status">
-              <Badge variant={statusVariant(ticket.status as Parameters<typeof statusVariant>[0])}>{statusLabel(ticket.status)}</Badge>
+              <TicketPill label={statusLabel(ticket.status)} cfg={STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.CLOSED} />
             </DetailRow>
             {(ticket.status === "CLOSED" || ticket.status === "OPEN_DONE") && (
               <DetailRow label="Reopen">
@@ -431,7 +432,7 @@ export default function PortalTicketDetail() {
                       target="_blank"
                       rel="noopener noreferrer"
                       title={att.filename}
-                      className="group relative block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:border-orange-400 transition-colors"
+                      className="group relative block w-20 h-20 rounded-lg overflow-hidden border border-gray-200 hover:border-[var(--rt-accent)] transition-colors"
                     >
                       <img src={att.url} alt={att.filename} className="w-full h-full object-cover" loading="lazy" />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />

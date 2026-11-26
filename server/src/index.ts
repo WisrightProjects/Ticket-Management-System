@@ -9,12 +9,21 @@ import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
+import { wiseWorkSso } from "./lib/wisework-sso.js";
 import userRoutes from "./routes/users.js";
 import ticketRoutes from "./routes/tickets.js";
 import webhookRoutes from "./routes/webhooks.js";
 import portalRoutes from "./routes/portal.js";
 import internalRoutes from "./routes/internal.js";
 import analyticsRoutes from "./routes/analytics.js";
+import organizationRoutes from "./routes/organizations.js";
+import onboardingRoutes from "./routes/onboarding.js";
+import customerWorkspaceRoutes from "./routes/customer-workspace.js";
+import { requireAuth } from "./middleware/auth.js";
+import { authorizeAttachment } from "./middleware/attachmentAuth.js";
+import ticketActivityRoutes from "./routes/ticket-activity.js";
+import workRoutes from "./routes/work.js";
+import { WorkError } from "./lib/staff-ticket-service.js";
 import { requireWebhookSecret } from "./middleware/webhook.js";
 import boss from "./lib/boss.js";
 import { registerClassifyWorker } from "./workers/classify.js";
@@ -143,7 +152,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // override the `application/octet-stream` fallback that mime-db returns for
 // non-standard JPEG aliases (.jfif from Google Images, .jpe). Without this,
 // `nosniff` prevents browsers from rendering them inside <img>.
-app.use("/uploads", express.static(path.resolve(__dirname, "../uploads"), {
+app.use("/uploads", authorizeAttachment, express.static(path.resolve(__dirname, "../uploads"), {
   setHeaders(res, filePath) {
     res.setHeader("Content-Disposition", "attachment");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -165,6 +174,15 @@ const apiLimiter = rateLimit({
 });
 app.use("/api", apiLimiter);
 
+app.get("/api/staff/wisework-sso", (_req, res) => {
+  res.json({ enabled: Boolean(wiseWorkSso) });
+});
+
+app.get("/api/staff/support-role", requireAuth, (req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json({ supportRole: req.user?.supportAccess?.support_role ?? null });
+});
+
 // Health check
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -172,7 +190,12 @@ app.get("/api/health", (_req, res) => {
 
 // API routes
 app.use("/api/users", userRoutes);
+app.use("/api/organizations", organizationRoutes);
+app.use("/api/onboarding", onboardingRoutes);
+app.use("/api/tickets", ticketActivityRoutes);
+app.use("/api/work", workRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/portal", customerWorkspaceRoutes);
 app.use("/api/portal", portalRoutes);
 app.use("/api/internal", internalRoutes);
 app.use("/api/analytics", analyticsRoutes);
@@ -190,6 +213,7 @@ Sentry.setupExpressErrorHandler(app);
 // Global error handler — converts Express HTML error pages to JSON
 // Must be registered after all routes
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof WorkError) { res.status(err.status).json({ error: err.message }); return; }
   const status = (err as any)?.status ?? (err as any)?.statusCode ?? 500;
   if ((err as any)?.type === "entity.parse.failed") {
     res.status(400).json({ error: "Invalid JSON in request body" });

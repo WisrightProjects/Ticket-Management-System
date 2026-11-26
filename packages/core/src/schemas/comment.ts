@@ -6,6 +6,7 @@ export type CommentSenderType = (typeof COMMENT_SENDER_TYPES)[number];
 export const apiCommentSchema = z.object({
   id:         z.string(),
   content:    z.string(),
+  isInternal: z.boolean().optional(),
   senderType: z.enum(COMMENT_SENDER_TYPES),
   author:     z.object({ id: z.string(), name: z.string() }),
   createdAt:  z.string(),

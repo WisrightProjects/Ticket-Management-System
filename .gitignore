@@ -63,3 +63,6 @@ uploads/
 
 # Local screenshots shared with Claude
 screenshots/
+
+# Local development database
+.local/

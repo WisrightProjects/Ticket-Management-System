@@ -75,11 +75,14 @@ function makePage(tickets: ApiTicket[]) {
   return { data: tickets, total: tickets.length, page: 1, pageSize: 10, totalPages: 1 };
 }
 
+function priorityFromUrl(url: string): string | null {
+  return new URL(url, "http://localhost").searchParams.get("priority");
+}
+
 async function resolveWithTickets(tickets: ApiTicket[]) {
-  // The component fires concurrent queries:
-  //   1. /api/tickets/assignable-users  (assignee filter dropdown)
-  //   2. /api/tickets/clients           (client filter dropdown)
-  //   3. /api/tickets?...               (ticket list)
+  // The component fires one query per priority column (Critical/High/Medium/Low),
+  // plus the two filter-dropdown lookups. Bucket fixtures by their own `priority`
+  // field so each column only sees the tickets that actually belong to it.
   mockedGet.mockImplementation((url: string) => {
     if (typeof url === "string" && url.includes("assignable-users")) {
       return Promise.resolve({ data: [] });
@@ -87,8 +90,35 @@ async function resolveWithTickets(tickets: ApiTicket[]) {
     if (typeof url === "string" && url.includes("clients")) {
       return Promise.resolve({ data: [] });
     }
-    return Promise.resolve({ data: makePage(tickets) });
+    const priority = priorityFromUrl(url);
+    const matching = tickets.filter((t) => t.priority === priority);
+    return Promise.resolve({ data: makePage(matching) });
   });
+}
+
+function findCardWithText(text: string) {
+  const cards = screen.getAllByTestId("ticket-card");
+  const card = cards.find((c: HTMLElement) => within(c).queryByText(text));
+  if (!card) throw new Error(`No ticket card found containing "${text}"`);
+  return card;
+}
+
+async function selectSortField(label: string) {
+  await userEvent.click(screen.getByTestId("sort-select-trigger"));
+  // The popup is portal-rendered and mounts before its open/close animation
+  // settles, during which items report `pointer-events: none` — wait for that
+  // to clear before clicking (a pre-existing base-ui Select timing quirk in
+  // this codebase, not specific to this control).
+  let item: HTMLElement | undefined;
+  await waitFor(() => {
+    const items = Array.from(document.querySelectorAll('[data-slot="select-item"]')) as HTMLElement[];
+    item = items.find((i) => i.textContent?.trim() === label);
+    if (!item) throw new Error(`Sort option "${label}" not found`);
+    if (getComputedStyle(item).pointerEvents === "none") {
+      throw new Error("select item not yet interactive");
+    }
+  });
+  await userEvent.click(item!);
 }
 
 // ---------------------------------------------------------------------------
@@ -108,87 +138,74 @@ describe("Tickets page — component", () => {
     expect(await screen.findByRole("heading", { name: "Tickets" })).toBeInTheDocument();
   });
 
-  it("shows all expected column headers", async () => {
+  it("sort control defaults to Date Created", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
-    await screen.findByRole("heading", { name: "Tickets" });
-
-    for (const header of ["ID", "Subject", "Sender", "Status", "Category", "Priority", "Date"]) {
-      expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
-    }
+    await screen.findAllByText("Dashboard crashes on login");
+    expect(screen.getByTestId("sort-select-trigger")).toHaveTextContent("Date Created");
   });
 
   it("shows the ticket count in the stats chip — singular", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
-    expect(await screen.findByText("1")).toBeInTheDocument();
+    expect(await screen.findByTestId("ticket-total-pill")).toHaveTextContent("1");
   });
 
   it("shows the ticket count in the stats chip — plural", async () => {
     await resolveWithTickets([TICKET_1, TICKET_2]);
     renderTickets();
-    expect(await screen.findByText("2")).toBeInTheDocument();
+    expect(await screen.findByTestId("ticket-total-pill")).toHaveTextContent("2");
   });
 
-  it("shows both the ID and Priority columns", async () => {
-    await resolveWithTickets([TICKET_1]);
-    renderTickets();
-    await screen.findByRole("heading", { name: "Tickets" });
-
-    expect(screen.getByRole("columnheader", { name: "ID" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Priority" })).toBeInTheDocument();
-  });
-
-  it("ticket count in stats chip matches the number of rendered rows", async () => {
+  it("ticket count in stats chip matches the number of rendered ticket cards", async () => {
     await resolveWithTickets([TICKET_1, TICKET_2]);
     renderTickets();
-    await screen.findByText("2");
+    await waitFor(() => expect(screen.getByTestId("ticket-total-pill")).toHaveTextContent("2"));
 
-    const rows = screen.getAllByRole("row");
-    const dataRows = rows.length - 1; // exclude header
-    expect(dataRows).toBe(2);
+    const cards = screen.getAllByTestId("ticket-card");
+    expect(cards.length).toBe(2);
   });
 
   // ─── Ticket data rendering ─────────────────────────────────────────────────
 
-  it("displays the ticket title as a link", async () => {
+  it("displays the ticket card as a link to the ticket detail page", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
-    const link = await screen.findByRole("link", { name: "Dashboard crashes on login" });
-    expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute("href", "/tickets/TKT-0042");
+    const card = await screen.findByTestId("ticket-card");
+    expect(card).toHaveAttribute("href", "/tickets/TKT-0042");
+    expect(within(card).getByText("Dashboard crashes on login")).toBeInTheDocument();
   });
 
-  it("shows sender name in the Sender column", async () => {
+  it("shows sender name on the ticket card", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
     await screen.findAllByText("Dashboard crashes on login");
-    const row = screen.getByRole("row", { name: /Dashboard crashes on login/i });
-    expect(within(row).getByText("Admin")).toBeInTheDocument();
+    const card = findCardWithText("Dashboard crashes on login");
+    expect(within(card).getByText("Admin")).toBeInTheDocument();
   });
 
-  it("shows project as subtitle in the Sender column", async () => {
+  it("shows project as subtitle on the ticket card", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
     await screen.findAllByText("Dashboard crashes on login");
-    const row = screen.getByRole("row", { name: /Dashboard crashes on login/i });
-    expect(within(row).getByText("Email Intake")).toBeInTheDocument();
+    const card = findCardWithText("Dashboard crashes on login");
+    expect(within(card).getByText("Email Intake")).toBeInTheDocument();
   });
 
   it("shows Category as plain text with correct label: Support", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
     await screen.findAllByText("Dashboard crashes on login");
-    const row = screen.getByRole("row", { name: /Dashboard crashes on login/i });
-    expect(within(row).getByText("Support")).toBeInTheDocument();
+    const card = findCardWithText("Dashboard crashes on login");
+    expect(within(card).getByText("Support")).toBeInTheDocument();
   });
 
   it("shows Status badge with correct label: Not Started", async () => {
     await resolveWithTickets([TICKET_1]);
     renderTickets();
     await screen.findAllByText("Dashboard crashes on login");
-    const row = screen.getByRole("row", { name: /Dashboard crashes on login/i });
-    expect(within(row).getByText("Not Started")).toBeInTheDocument();
+    const card = findCardWithText("Dashboard crashes on login");
+    expect(within(card).getByText("Not Started")).toBeInTheDocument();
   });
 
   // ─── Ordering ─────────────────────────────────────────────────────────────
@@ -198,10 +215,10 @@ describe("Tickets page — component", () => {
     renderTickets();
     await screen.findAllByText("Dashboard crashes on login");
 
-    const rows = screen.getAllByRole("row");
-    const rowTexts = rows.map((r: HTMLElement) => r.textContent ?? "");
-    const idx1 = rowTexts.findIndex((t: string) => t.includes("Dashboard crashes on login"));
-    const idx2 = rowTexts.findIndex((t: string) => t.includes("Older login issue"));
+    const cards = screen.getAllByTestId("ticket-card");
+    const cardTexts = cards.map((c: HTMLElement) => c.textContent ?? "");
+    const idx1 = cardTexts.findIndex((t: string) => t.includes("Dashboard crashes on login"));
+    const idx2 = cardTexts.findIndex((t: string) => t.includes("Older login issue"));
     expect(idx1).toBeLessThan(idx2);
   });
 
@@ -210,7 +227,19 @@ describe("Tickets page — component", () => {
   it("shows empty state message when there are no tickets", async () => {
     await resolveWithTickets([]);
     renderTickets();
-    expect((await screen.findAllByText(/no tickets yet/i))[0]).toBeInTheDocument();
+    const empties = await screen.findAllByText(/no (critical|high|medium|low) tickets/i);
+    expect(empties).toHaveLength(4);
+  });
+
+  // ─── Board structure ──────────────────────────────────────────────────────
+
+  it("renders 4 priority columns and no priority filter dropdown", async () => {
+    await resolveWithTickets([TICKET_1]);
+    renderTickets();
+    await screen.findAllByText("Dashboard crashes on login");
+    const columnLabels = screen.getAllByTestId("priority-column-label").map((el: HTMLElement) => el.textContent);
+    expect(columnLabels).toEqual(["Critical", "High", "Medium", "Low"]);
+    expect(screen.queryByText("All priorities")).not.toBeInTheDocument();
   });
 
   // ─── Error state ──────────────────────────────────────────────────────────
@@ -231,7 +260,7 @@ describe("Tickets page — component", () => {
 
   // ─── Loading state ────────────────────────────────────────────────────────
 
-  it("shows skeleton rows while loading", () => {
+  it("shows skeleton cards while loading (no ticket cards rendered yet)", () => {
     mockedGet.mockImplementation((url: string) => {
       if (typeof url === "string" && url.includes("assignable-users")) {
         return Promise.resolve({ data: [] });
@@ -242,7 +271,8 @@ describe("Tickets page — component", () => {
       return new Promise(() => {}); // never resolves — keeps the tickets query loading
     });
     renderTickets();
-    expect(screen.getByRole("columnheader", { name: "Subject" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tickets" })).toBeInTheDocument();
+    expect(screen.queryByTestId("ticket-card")).not.toBeInTheDocument();
   });
 });
 
@@ -258,7 +288,9 @@ describe("Tickets page — sorting", () => {
       if (typeof url === "string" && url.includes("clients")) {
         return Promise.resolve({ data: [] });
       }
-      return Promise.resolve({ data: makePage([TICKET_1]) });
+      const priority = priorityFromUrl(url);
+      const matching = priority === TICKET_1.priority ? [TICKET_1] : [];
+      return Promise.resolve({ data: makePage(matching) });
     });
   });
 
@@ -271,38 +303,36 @@ describe("Tickets page — sorting", () => {
     );
   });
 
-  it("stats chip shows the ticket count by default (no filters active)", async () => {
+  it("shows tickets created today by default and can switch to previous tickets", async () => {
     renderTickets();
-    expect(await screen.findByText("1")).toBeInTheDocument();
-  });
+    expect(screen.getByRole("button", { name: "Today", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledWith(
+      expect.stringMatching(/[?&]from=.*&to=/), expect.any(Object),
+    ));
 
-  it("clicking Status column sends sortBy=status&sortOrder=asc", async () => {
-    renderTickets();
-    await screen.findAllByText("Dashboard crashes on login");
-
-    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
-
+    await userEvent.click(screen.getByRole("button", { name: "Previous tickets" }));
+    expect(screen.getByRole("button", { name: "Previous tickets" })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => {
-      expect(mockedGet).toHaveBeenLastCalledWith(
-        expect.stringContaining("sortBy=status&sortOrder=asc"),
-        expect.any(Object)
-      );
+      const [url] = mockedGet.mock.lastCall ?? [];
+      const params = new URL(String(url), "http://localhost").searchParams;
+      const now = new Date();
+      const endOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, -1);
+      expect(params.has("from")).toBe(false);
+      expect(params.get("to")).toBe(endOfYesterday.toISOString());
     });
   });
 
-  it("clicking Status column twice sends sortOrder=desc", async () => {
+  it("stats chip shows the ticket count by default (no filters active)", async () => {
+    renderTickets();
+    expect(await screen.findByTestId("ticket-total-pill")).toHaveTextContent("1");
+  });
+
+  it("selecting Status in the sort control sends sortBy=status (direction unchanged)", async () => {
     renderTickets();
     await screen.findAllByText("Dashboard crashes on login");
 
-    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
-    await waitFor(() =>
-      expect(mockedGet).toHaveBeenLastCalledWith(
-        expect.stringContaining("sortOrder=asc"),
-        expect.any(Object)
-      )
-    );
+    await selectSortField("Status");
 
-    await userEvent.click(screen.getByRole("columnheader", { name: "Status" }));
     await waitFor(() => {
       expect(mockedGet).toHaveBeenLastCalledWith(
         expect.stringContaining("sortBy=status&sortOrder=desc"),
@@ -311,18 +341,24 @@ describe("Tickets page — sorting", () => {
     });
   });
 
-  it("Status column header gains cursor-pointer after sorting is enabled", async () => {
+  it("toggling sort direction after selecting Status sends sortOrder=asc", async () => {
     renderTickets();
     await screen.findAllByText("Dashboard crashes on login");
 
-    expect(screen.getByRole("columnheader", { name: "Status" })).toHaveClass("cursor-pointer");
-  });
+    await selectSortField("Status");
+    await waitFor(() =>
+      expect(mockedGet).toHaveBeenLastCalledWith(
+        expect.stringContaining("sortBy=status&sortOrder=desc"),
+        expect.any(Object)
+      )
+    );
 
-  it("Subject column header has no cursor-pointer (sorting disabled)", async () => {
-    renderTickets();
-    await screen.findAllByText("Dashboard crashes on login");
-
-    expect(screen.getByRole("columnheader", { name: "Subject" })).not.toHaveClass("cursor-pointer");
-    expect(screen.getByRole("columnheader", { name: "Status" })).toHaveClass("cursor-pointer");
+    await userEvent.click(screen.getByTestId("sort-direction-toggle"));
+    await waitFor(() => {
+      expect(mockedGet).toHaveBeenLastCalledWith(
+        expect.stringContaining("sortBy=status&sortOrder=asc"),
+        expect.any(Object)
+      );
+    });
   });
 });

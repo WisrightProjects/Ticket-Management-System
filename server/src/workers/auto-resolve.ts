@@ -105,7 +105,7 @@ Rules:
       }),
       prisma.ticket.update({
         where: { id: ticketDbId },
-        data:  { status: STATUS.OPEN_DONE },
+        data:  { status: STATUS.OPEN_DONE, aiResolved: true, resolvedAt: new Date(), firstResponseAt: new Date(), resolutionSummary: parsed.answer.trim() },
       }),
     ]);
     console.log(`[auto-resolve] ${ticketId} resolved from knowledge base`);

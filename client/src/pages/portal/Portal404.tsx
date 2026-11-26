@@ -11,7 +11,7 @@ export default function Portal404() {
         </p>
         <Link
           to="/"
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center justify-center rounded-lg bg-[var(--rt-accent)] px-5 py-2.5 text-sm font-medium text-white hover:bg-[var(--rt-accent-hover)] transition-colors"
         >
           Go to Home
         </Link>

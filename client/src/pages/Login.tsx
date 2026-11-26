@@ -1,11 +1,17 @@
+import { AuthLayout } from "@/components/AuthLayout";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
-import { signIn } from "@/lib/auth-client";
+import { authClient, signIn } from "@/lib/auth-client";
+import { ROLES } from "@tms/core";
+import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
+import { CLIENT_LOGIN_PATH, clientPortalDestination } from "@/lib/client-login";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Enter a valid email"),
@@ -14,8 +20,36 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-function Login() {
+const rememberedClientEmailKey = "right-tracker:remembered-client-email";
+
+function readRememberedClientEmail() {
+  try {
+    return localStorage.getItem(rememberedClientEmailKey) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveRememberedClientEmail(email: string) {
+  try {
+    if (email) localStorage.setItem(rememberedClientEmailKey, email);
+    else localStorage.removeItem(rememberedClientEmailKey);
+  } catch {
+    // Sign-in also works when the browser blocks storage.
+  }
+}
+
+function Login({ client = false }: { client?: boolean }) {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const showAccountForm = client || params.get("account") === "local";
+  const accountParams = new URLSearchParams(params);
+  if (showAccountForm) accountParams.delete("account");
+  else accountParams.set("account", "local");
+  const accountHref = accountParams.size ? `/login?${accountParams}` : "/login";
+  const cache = useQueryClient();
+  const [rememberedEmail] = useState(() => client ? readRememberedClientEmail() : "");
+  const [rememberEmail, setRememberEmail] = useState(Boolean(rememberedEmail));
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -26,6 +60,7 @@ function Login() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     mode: "onBlur",
+    defaultValues: { email: rememberedEmail },
   });
 
   const onSubmit = async (data: LoginFormData) => {
@@ -42,123 +77,87 @@ function Login() {
     }
 
     sessionStorage.setItem("tms_active", "1");
-    navigate("/");
+    cache.clear();
+    const { data: session } = await authClient.getSession();
+    const role = (session?.user as { role?: string } | undefined)?.role;
+    const returnTo = params.get("returnTo");
+    if (role === ROLES.CUSTOMER) {
+      if (client && rememberEmail) saveRememberedClientEmail(data.email);
+      navigate(clientPortalDestination(returnTo), { replace: true });
+    } else if (!client) {
+      navigate(returnTo && /^\/(?:tickets(?:\/TKT-\d+)?)?(?:\?[^#]*)?$/.test(returnTo) ? returnTo : "/", { replace: true });
+    }
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      {/* Left branding panel — RCB black & red */}
-      <div
-        className="hidden md:flex flex-col items-center justify-center"
-        style={{
-          width: "45%", flexShrink: 0,
-          background: "linear-gradient(160deg, #0a0000 0%, #660000 30%, #990000 65%, #cc0000 100%)",
-          padding: "48px", position: "relative", overflow: "hidden",
-        }}
-      >
-        {/* Gold decorative rings */}
-        <div style={{ position:"absolute", top:"-60px", right:"-60px", width:"260px", height:"260px", borderRadius:"50%", border:"2px solid rgba(202,138,4,0.25)", background:"transparent" }} />
-        <div style={{ position:"absolute", top:"-40px", right:"-40px", width:"200px", height:"200px", borderRadius:"50%", border:"1px solid rgba(202,138,4,0.15)", background:"transparent" }} />
-        <div style={{ position:"absolute", bottom:"-80px", left:"-40px", width:"240px", height:"240px", borderRadius:"50%", border:"2px solid rgba(202,138,4,0.20)", background:"transparent" }} />
-
-        <div style={{ position:"relative", zIndex:1, textAlign:"center", maxWidth:"360px" }}>
-          {/* Logo */}
-          <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.95)", borderRadius:"20px", padding:"20px 32px", marginBottom:"32px", boxShadow:"0 8px 32px rgba(0,0,0,0.4), 0 0 0 2px rgba(202,138,4,0.4)" }}>
-            <img src="/wisright-logo.png" alt="WisRight" style={{ height:"52px", width:"auto" }} />
-          </div>
-
-          <h1 style={{ color:"#ffffff", fontSize:"30px", fontWeight:800, margin:"0 0 6px", letterSpacing:"-0.5px" }}>
-            Right Tracker
-          </h1>
-          <p style={{ color:"rgba(202,138,4,0.9)", fontSize:"12px", fontWeight:600, letterSpacing:"0.12em", margin:"0 0 12px", textTransform:"uppercase" }}>
-            Support Ticket Management Platform
+    <AuthLayout clientSignIn={client} title={client ? "Client sign in" : showAccountForm ? "Right Tracker sign in" : "Welcome back"}
+      description={client ? "Sign in with the work email that received your invitation." : "Sign in to your Right Tracker workspace."}>
+      {!showAccountForm && (
+        <div className="mb-5 space-y-4">
+          <Button className="h-11 w-full" render={<Link to="/staff/wisework" />}>Continue with WiseWork</Button>
+          <p className="text-center text-sm text-muted-foreground">
+            Have a separate Right Tracker account?{" "}
+            <Link to={accountHref} className="font-medium text-primary underline-offset-4 hover:underline">Sign in</Link>
           </p>
-          {/* Gold underline */}
-          <div style={{ width:"60px", height:"3px", background:"linear-gradient(90deg, #ca8a04, #fbbf24)", borderRadius:"2px", margin:"0 auto 18px" }} />
-          <p style={{ color:"rgba(255,255,255,0.72)", fontSize:"14px", lineHeight:1.7, margin:"0 0 28px" }}>
-            One platform to receive, assign, track and resolve all client support requests — from submission to closure.
-          </p>
-
         </div>
-
-      </div>
-
-      {/* Right form panel */}
-      <div className="flex flex-col items-center justify-center" style={{ flex:1, background:"#fff9f9" }}>
-        {/* Mobile-only red branding header */}
-        <div
-          className="flex md:hidden flex-col items-center justify-center w-full"
-          style={{
-            background: "linear-gradient(160deg, #0a0000 0%, #660000 30%, #990000 65%, #cc0000 100%)",
-            padding: "32px 24px",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          {/* Decorative rings */}
-          <div style={{ position:"absolute", top:"-40px", right:"-40px", width:"180px", height:"180px", borderRadius:"50%", border:"2px solid rgba(202,138,4,0.25)", background:"transparent" }} />
-          <div style={{ position:"absolute", bottom:"-40px", left:"-30px", width:"160px", height:"160px", borderRadius:"50%", border:"2px solid rgba(202,138,4,0.20)", background:"transparent" }} />
-
-          <div style={{ position:"relative", zIndex:1, textAlign:"center" }}>
-            <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.95)", borderRadius:"16px", padding:"14px 24px", marginBottom:"20px", boxShadow:"0 8px 32px rgba(0,0,0,0.4), 0 0 0 2px rgba(202,138,4,0.4)" }}>
-              <img src="/wisright-logo.png" alt="Right Tracker" style={{ height:"40px", width:"auto" }} />
-            </div>
-            <h1 style={{ color:"#ffffff", fontSize:"22px", fontWeight:800, margin:"0 0 4px", letterSpacing:"-0.3px" }}>Right Tracker</h1>
-            <p style={{ color:"rgba(202,138,4,0.9)", fontSize:"11px", fontWeight:600, letterSpacing:"0.12em", margin:"0 0 10px", textTransform:"uppercase" }}>
-              Support Ticket Management Platform
-            </p>
-            <div style={{ width:"48px", height:"3px", background:"linear-gradient(90deg, #ca8a04, #fbbf24)", borderRadius:"2px", margin:"0 auto" }} />
+      )}
+      {showAccountForm && <>
+      {serverError && <p role="alert" className="mb-4 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">{serverError}</p>}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email address</Label>
+          <Input id="email" type="email" autoComplete="username" placeholder="you@company.com" className="h-11" {...register("email")}
+            aria-invalid={!!errors.email} aria-describedby={errors.email ? "login-email-error" : undefined} />
+          {errors.email && <p id="login-email-error" className="text-xs text-destructive">{errors.email.message}</p>}
+        </div>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label htmlFor="password">Password</Label>
+            <Link to={client ? "/portal/forgot-password?client=1" : "/portal/forgot-password"} className="text-xs font-medium text-primary underline-offset-4 hover:underline">Forgot password?</Link>
           </div>
-        </div>
-
-        <div className="flex flex-col items-center justify-center px-4 py-10 sm:px-8 sm:py-12 w-full" style={{ flex:1 }}>
-        <div style={{ width:"100%", maxWidth:"400px" }}>
-
-          <div style={{ background:"#ffffff", borderRadius:"20px", padding:"clamp(24px, 5vw, 40px)", boxShadow:"0 4px 24px rgba(204,0,0,0.10), 0 1px 3px rgba(0,0,0,0.05)" }}>
-            {/* Gold top bar */}
-            <div style={{ height:"4px", background:"linear-gradient(90deg, #0a0000, #990000, #cc0000)", margin:"calc(-1 * clamp(24px, 5vw, 40px)) calc(-1 * clamp(24px, 5vw, 40px)) 32px", borderTopLeftRadius:"20px", borderTopRightRadius:"20px" }} />
-
-            <div style={{ marginBottom:"28px" }}>
-              <h2 style={{ fontSize:"24px", fontWeight:800, color:"#1a0000", margin:"0 0 6px", letterSpacing:"-0.3px" }}>Welcome back</h2>
-              <p style={{ color:"#6b7280", fontSize:"14px", margin:0 }}>Sign in to manage tickets and support requests.</p>
-            </div>
-
-            {serverError && (
-              <div style={{ background:"#fff1f2", border:"1px solid #fecdd3", color:"#be123c", borderRadius:"10px", padding:"10px 14px", fontSize:"13px", marginBottom:"20px" }}>
-                ⚠ {serverError}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" autoComplete="off">
-              <div>
-                <label htmlFor="email" style={{ display:"block", fontSize:"13px", fontWeight:600, color:"#374151", marginBottom:"6px" }}>Email address</label>
-                <Input id="email" type="email" placeholder="you@wisright.com" {...register("email")} style={{ height:"44px", fontSize:"14px", borderRadius:"10px" }} className={errors.email ? "border-red-400" : ""} />
-                {errors.email && <p style={{ color:"#be123c", fontSize:"12px", marginTop:"4px" }}>{errors.email.message}</p>}
-              </div>
-              <div>
-                <label htmlFor="password" style={{ display:"block", fontSize:"13px", fontWeight:600, color:"#374151", marginBottom:"6px" }}>Password</label>
-                <div style={{ position:"relative" }}>
-                  <Input id="password" type={showPassword ? "text" : "password"} placeholder="Enter your password" {...register("password")} style={{ height:"44px", fontSize:"14px", paddingRight:"44px", borderRadius:"10px" }} className={errors.password ? "border-red-400" : ""} />
-                  <button type="button" onClick={() => setShowPassword((v) => !v)} style={{ position:"absolute", right:0, top:0, bottom:0, padding:"0 14px", background:"none", border:"none", cursor:"pointer", color:"#94a3b8" }} tabIndex={-1}>
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {errors.password && <p style={{ color:"#be123c", fontSize:"12px", marginTop:"4px" }}>{errors.password.message}</p>}
-              </div>
-
-              <button type="submit" disabled={isSubmitting}
-                style={{ width:"100%", height:"46px", borderRadius:"10px", marginTop:"8px", background:"linear-gradient(135deg, #0a0000 0%, #990000 50%, #cc0000 100%)", color:"#ffffff", fontWeight:700, fontSize:"14px", border:"none", cursor:isSubmitting ? "not-allowed" : "pointer", boxShadow:"0 4px 16px rgba(204,0,0,0.40)", transition:"all 0.2s", opacity:isSubmitting ? 0.75 : 1, letterSpacing:"0.02em" }}
-                onMouseEnter={(e) => { if (!isSubmitting) { (e.currentTarget as HTMLElement).style.boxShadow="0 4px 20px rgba(202,138,4,0.45)"; (e.currentTarget as HTMLElement).style.transform="translateY(-1px)"; }}}
-                onMouseLeave={(e) => { if (!isSubmitting) { (e.currentTarget as HTMLElement).style.boxShadow="0 4px 16px rgba(204,0,0,0.40)"; (e.currentTarget as HTMLElement).style.transform="translateY(0)"; }}}>
-                {isSubmitting ? "Signing in…" : "Sign In"}
-              </button>
-            </form>
+          <div className="relative">
+            <Input id="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Enter your password"
+              className="h-11 pr-11" {...register("password")} aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? "login-password-error" : undefined} />
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPassword((value) => !value)}>
+              {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+            </Button>
           </div>
-          <p style={{ marginTop:"24px", textAlign:"center", fontSize:"12px", color:"#9ca3af" }}>Right Tracker · WisRight Internal Platform</p>
+          {errors.password && <p id="login-password-error" className="text-xs text-destructive">{errors.password.message}</p>}
         </div>
-        </div>
-      </div>
-    </div>
+        {client && (
+          <div className="space-y-1.5">
+            <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={rememberEmail} aria-describedby="remember-email-help"
+                className="size-4 accent-primary" onChange={(event) => {
+                  setRememberEmail(event.target.checked);
+                  if (!event.target.checked) saveRememberedClientEmail("");
+                }} />
+              Remember my email
+            </label>
+            <p id="remember-email-help" className="text-xs leading-relaxed text-muted-foreground">Your browser can fill your password if you save it in its password manager.</p>
+          </div>
+        )}
+        <Button type="submit" disabled={isSubmitting} className="mt-2 h-11 w-full font-semibold">
+          {isSubmitting ? "Signing in…" : "Sign In"}
+        </Button>
+      </form>
+      {!client && (
+        <Link to={accountHref} onClick={() => { setServerError(""); setShowPassword(false); }}
+          className="mt-4 block text-center text-xs font-medium text-primary hover:underline">
+          Back to staff sign-in options
+        </Link>
+      )}
+      </>}
+      {client && (
+        <p className="mt-5 text-center text-sm text-muted-foreground">
+          First time signing in?{" "}
+          <Link to="/activate" className="font-medium text-primary underline-offset-4 hover:underline">Set your password</Link>
+        </p>
+      )}
+      {!client && <Link to={CLIENT_LOGIN_PATH} className="mt-4 block text-center text-xs font-medium text-primary hover:underline">Client sign in</Link>}
+    </AuthLayout>
   );
 }
 

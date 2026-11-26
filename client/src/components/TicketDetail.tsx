@@ -4,20 +4,20 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   apiTicketSchema,
   STATUS,
+  type ApiTicket,
 } from "@tms/core";
 import {
   CATEGORY_LABELS,
   PRIORITY_LABELS,
   STATUS_LABELS,
-  priorityVariant,
-  statusVariant,
-  typeVariant,
 } from "@/lib/ticket-badges";
-import { Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { STATUS_CONFIG, PRIORITY_CONFIG, TYPE_CONFIG } from "@/lib/status-config";
+import { ImageOff, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { SectionHeader } from "@/components/SectionHeader";
+import { TicketPill } from "@/components/TicketPill";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -27,19 +27,26 @@ const ATTACHMENT_PREFIX_RE = /^d(\d+)_/;
 
 function AttachmentThumb({
   a,
+  unavailable,
+  onUnavailable,
 }: {
   a: { filename: string; mimetype: string; url: string };
+  unavailable: boolean;
+  onUnavailable: () => void;
 }) {
-  const [imgError, setImgError] = useState(false);
-  const isImage = a.mimetype.startsWith("image/") && !imgError;
   return (
     <div className="w-20 h-20 rounded-md border overflow-hidden bg-muted/30 flex items-center justify-center">
-      {isImage ? (
+      {unavailable ? (
+        <span className="flex flex-col items-center gap-1 px-1 text-center text-xs text-muted-foreground">
+          <ImageOff className="size-4" aria-hidden="true" />
+          Image unavailable
+        </span>
+      ) : a.mimetype.startsWith("image/") ? (
         <img
           src={a.url}
           alt={a.filename}
           className="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
-          onError={() => setImgError(true)}
+          onError={onUnavailable}
         />
       ) : (
         <span className="text-xs text-muted-foreground text-center px-1 break-all">
@@ -56,6 +63,7 @@ function AttachmentRow({
   attachments: Array<{ id: string; filename: string; mimetype: string; url: string }>;
 }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [unavailableUrls, setUnavailableUrls] = useState<Set<string>>(() => new Set());
   const images = attachments.filter((a) => a.mimetype.startsWith("image/"));
 
   if (attachments.length === 0) return null;
@@ -64,15 +72,19 @@ function AttachmentRow({
       <div className="flex flex-wrap gap-3 mt-3">
         {attachments.map((a) => {
           const imgIdx = images.findIndex((img) => img.id === a.id);
+          const unavailable = unavailableUrls.has(a.url);
           return (
             <button
               key={a.id}
               type="button"
+              disabled={unavailable}
               onClick={() => imgIdx >= 0 ? setLightboxIndex(imgIdx) : window.open(a.url, "_blank", "noopener,noreferrer")}
-              className="flex flex-col items-center gap-1 group cursor-pointer"
+              className="group flex cursor-pointer flex-col items-center gap-1 disabled:cursor-default"
+              aria-label={unavailable ? `${a.filename}: image unavailable` : undefined}
               title={a.filename}
             >
-              <AttachmentThumb a={a} />
+              <AttachmentThumb a={a} unavailable={unavailable} onUnavailable={() =>
+                setUnavailableUrls((urls) => new Set(urls).add(a.url))} />
               <span className="text-xs text-muted-foreground max-w-[80px] truncate">
                 {a.filename.replace(ATTACHMENT_PREFIX_RE, "")}
               </span>
@@ -127,10 +139,8 @@ function DescriptionBody({
           <div key={idx}>
             {idx > 0 && (
               <>
-                <hr className="mb-3" style={{ borderColor: "var(--rt-border)" }} />
-                <p className="text-xs font-semibold uppercase tracking-wide mb-2 text-muted-foreground">
-                  Description {idx + 1}
-                </p>
+                <hr className="mb-3 border-border" />
+                <SectionHeader title={`Description ${idx + 1}`} className="mb-2" />
               </>
             )}
             <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">{section}</pre>
@@ -140,8 +150,8 @@ function DescriptionBody({
       })}
       {generalAttachments.length > 0 && (
         <div>
-          <hr className="mb-3" style={{ borderColor: "var(--rt-border)" }} />
-          <p className="text-xs font-semibold uppercase tracking-wide mb-2 text-muted-foreground">Attachments</p>
+          <hr className="mb-3 border-border" />
+          <SectionHeader title="Attachments" className="mb-2" />
           <AttachmentRow attachments={generalAttachments} />
         </div>
       )}
@@ -154,13 +164,35 @@ function DescriptionBody({
 interface TicketDetailProps {
   /** Human-readable ticket ID, e.g. "TKT-0001" */
   ticketId: string;
+  readOnly?: boolean;
+  embedded?: boolean;
+}
+
+export function TicketIdentity({ ticket, pageHeading = false }: { ticket: ApiTicket; pageHeading?: boolean }) {
+  const Heading = pageHeading ? "h1" : "h2";
+  return (
+    <div className="min-w-0 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-xs font-semibold text-primary">{ticket.ticketId}</span>
+        <TicketPill label={STATUS_LABELS[ticket.status]} cfg={STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.CLOSED} />
+        <TicketPill label={PRIORITY_LABELS[ticket.priority]} cfg={PRIORITY_CONFIG[ticket.priority] ?? PRIORITY_CONFIG.LOW} />
+        <TicketPill label={CATEGORY_LABELS[ticket.type]} cfg={TYPE_CONFIG[ticket.type] ?? TYPE_CONFIG.TASK} />
+      </div>
+      <Heading className="break-words text-xl font-semibold tracking-tight sm:text-2xl">{ticket.title}</Heading>
+      {pageHeading && <p className="break-words text-sm text-muted-foreground">
+        {ticket.senderName || ticket.senderEmail || ticket.createdBy.name}
+        {" · "}
+        {new Date(ticket.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+      </p>}
+    </div>
+  );
 }
 
 /**
  * Displays a ticket's header (id, badges, title), description section,
  * and customer rating section. Metadata editing lives in TicketMetaSidebar.
  */
-function TicketDetail({ ticketId }: TicketDetailProps) {
+function TicketDetail({ ticketId, readOnly = false, embedded = false }: TicketDetailProps) {
   const [summary, setSummary] = useState<string | null>(null);
 
   const summarizeMutation = useMutation({
@@ -208,34 +240,23 @@ function TicketDetail({ ticketId }: TicketDetailProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header: ticketId, type/priority/status badges, title */}
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <span className="font-mono text-sm text-muted-foreground">{ticket.ticketId}</span>
-          <div className="flex gap-2">
-            <Badge variant={typeVariant(ticket.type)}>{CATEGORY_LABELS[ticket.type]}</Badge>
-            <Badge variant={priorityVariant(ticket.priority)}>{PRIORITY_LABELS[ticket.priority]}</Badge>
-            <Badge variant={statusVariant(ticket.status)}>{STATUS_LABELS[ticket.status]}</Badge>
-          </div>
-        </div>
-        <h2 className="text-xl sm:text-2xl font-bold">{ticket.title}</h2>
-      </div>
+      {!embedded && <TicketIdentity ticket={ticket} />}
 
       {/* Description / message body */}
       <div>
-        <div className="flex items-center gap-3 mb-2">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Description</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Description</h3>
           <Button
             size="sm"
             variant="outline"
             onClick={() => summarizeMutation.mutate()}
-            disabled={summarizeMutation.isPending}
+            disabled={readOnly || summarizeMutation.isPending}
           >
             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
             {summarizeMutation.isPending ? "Summarizing…" : "Summarize"}
           </Button>
         </div>
-        <div className="border rounded-lg p-4 bg-muted/20">
+        <div className={embedded ? "break-words text-sm leading-relaxed" : "rounded-lg border bg-muted/20 p-4 break-words"}>
           <DescriptionBody description={ticket.description} attachments={ticket.attachments} />
         </div>
         {summarizeMutation.isError && (
@@ -243,7 +264,7 @@ function TicketDetail({ ticketId }: TicketDetailProps) {
         )}
         {summary && !summarizeMutation.isPending && (
           <div className="mt-3 rounded-lg border bg-muted/30 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">AI Summary</p>
+            <SectionHeader title="AI Summary" className="mb-2" />
             <p className="text-sm whitespace-pre-wrap">{summary}</p>
           </div>
         )}
@@ -252,9 +273,7 @@ function TicketDetail({ ticketId }: TicketDetailProps) {
       {/* Customer rating — only shown on closed tickets that have a rating */}
       {ticket.status === STATUS.CLOSED && ticket.rating != null && (
         <div className="border rounded-lg p-4 bg-muted/20">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-            Customer Rating
-          </h3>
+          <SectionHeader title="Customer Rating" className="mb-3" />
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-0.5">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -280,9 +299,7 @@ function TicketDetail({ ticketId }: TicketDetailProps) {
 
       {ticket.status === STATUS.CLOSED && ticket.rating == null && (
         <div className="border rounded-lg p-4 bg-muted/20">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-            Customer Rating
-          </h3>
+          <SectionHeader title="Customer Rating" className="mb-1" />
           <p className="text-sm text-muted-foreground">No rating submitted yet.</p>
         </div>
       )}

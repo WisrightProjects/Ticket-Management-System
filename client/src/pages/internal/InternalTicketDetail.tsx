@@ -4,6 +4,8 @@ import axios from "axios";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TicketReplies } from "@/components/TicketReplies";
 import { ArrowLeft } from "lucide-react";
+import { STATUS_CONFIG } from "@/lib/status-config";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 type InternalTicketDetail = {
   id:          string;
@@ -30,22 +32,14 @@ const STATUS_LABELS: Record<string, string> = {
   REOPENED:           "Reopened",
 };
 
-const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
-  UN_ASSIGNED:       { bg: "bg-gray-100",  text: "text-gray-600",  dot: "bg-gray-400"  },
-  OPEN_NOT_STARTED:  { bg: "bg-amber-50",  text: "text-amber-700", dot: "bg-amber-400" },
-  OPEN_IN_PROGRESS:  { bg: "bg-blue-50",   text: "text-blue-700",  dot: "bg-blue-500"  },
-  OPEN_QA:           { bg: "bg-purple-50", text: "text-purple-700",dot: "bg-purple-500"},
-  OPEN_DONE:         { bg: "bg-teal-50",   text: "text-teal-700",  dot: "bg-teal-500"  },
-  WAITING_FOR_CLIENT:{ bg: "bg-orange-50", text: "text-orange-700",dot: "bg-orange-500"},
-  CLOSED:            { bg: "bg-green-50",  text: "text-green-700", dot: "bg-green-500" },
-  REOPENED:          { bg: "bg-red-50",    text: "text-red-700",   dot: "bg-red-500"   },
-};
-
 function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLE[status] ?? { bg: "bg-gray-100", text: "text-gray-600", dot: "bg-gray-400" };
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.CLOSED;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${s.bg} ${s.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+      style={{ background: cfg.bg, color: cfg.text }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: cfg.dot }} />
       {STATUS_LABELS[status] ?? status}
     </span>
   );
@@ -69,7 +63,7 @@ export default function InternalTicketDetail() {
 
   if (isLoading) {
     return (
-      <div className="p-6 max-w-3xl mx-auto space-y-4">
+      <div className="px-4 sm:px-6 py-6 sm:py-8 max-w-3xl mx-auto space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-32 w-full" />
       </div>
@@ -78,15 +72,15 @@ export default function InternalTicketDetail() {
 
   if (isError || !ticket) {
     return (
-      <div className="p-6">
-        <p className="text-destructive text-sm">Ticket not found or you don't have access.</p>
-        <Link to="/internal/tickets" className="text-primary text-sm underline mt-2 inline-block">Back to My Tickets</Link>
+      <div className="px-4 sm:px-6 py-6 sm:py-8 max-w-3xl mx-auto space-y-3">
+        <ErrorBanner message="Ticket not found or you don't have access." />
+        <Link to="/internal/tickets" className="text-primary text-sm underline inline-block">Back to My Tickets</Link>
       </div>
     );
   }
 
   return (
-    <div className="p-6" style={{ background: "var(--rt-bg)", minHeight: "100vh" }}>
+    <div className="px-4 sm:px-6 py-6 sm:py-8" style={{ background: "var(--rt-bg)", minHeight: "100vh" }}>
       <div className="max-w-3xl mx-auto">
 
         {/* Back link */}
@@ -99,7 +93,7 @@ export default function InternalTicketDetail() {
         </Link>
 
         {/* Header card */}
-        <div className="bg-white rounded-2xl border border-border shadow-sm p-6 mb-4">
+        <div className="bg-[var(--rt-surface)] rounded-2xl border border-[var(--rt-border)] shadow-sm p-6 mb-4">
           <div className="flex items-start gap-3 mb-4">
             <span className="font-mono text-xs text-muted-foreground pt-1">{ticket.ticketId}</span>
             <h1 className="text-lg font-semibold text-foreground flex-1">{ticket.title}</h1>

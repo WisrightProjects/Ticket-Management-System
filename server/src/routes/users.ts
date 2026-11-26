@@ -7,6 +7,7 @@ import { requireAdmin } from "../middleware/auth.js";
 import { ROLES, STATUS, createUserSchema, editUserSchema } from "@tms/core";
 import { runHrmsSync } from "../workers/sync-hrms.js";
 import { getEmployeeDirectory } from "../lib/hrms.js";
+import { readFile } from "node:fs/promises";
 
 const router = Router();
 
@@ -16,8 +17,19 @@ router.use(requireAdmin);
 // GET /api/users — list all users (TMS accounts + HRMS employees merged)
 // HRMS employees without a TMS account appear as `source: "HRMS"` rows; the UI
 // can prompt the admin to "Add to System" which provisions a real TMS account.
-router.get("/", async (_req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
+  const activeEmployees = req.query.scope === "active-employees";
+  const accountsOnly = req.query.scope === "accounts";
+  const directorySnapshot = activeEmployees && process.env.LOCAL_DEVELOPMENT_ONLY === "true" && process.env.LOCAL_WISEWORK_DIRECTORY;
   try {
+    if (activeEmployees) {
+      const employees = directorySnapshot
+        ? JSON.parse(await readFile(directorySnapshot, "utf8")) as Awaited<ReturnType<typeof getEmployeeDirectory>>
+        : await getEmployeeDirectory({ requireConnection: true });
+      if (directorySnapshot) res.setHeader("X-Employee-Directory-Source", "local-snapshot");
+      res.json(employees);
+      return;
+    }
     const [tmsUsers, hrmsEmployees] = await Promise.all([
       prisma.user.findMany({
         where:   { role: { in: [ROLES.ADMIN, ROLES.AGENT] } },
@@ -26,7 +38,7 @@ router.get("/", async (_req: Request, res: Response) => {
       }),
       // Live fetch from HRMS-POC; 5s timeout so a slow/unreachable HRMS server
       // doesn't hang the Users page indefinitely
-      Promise.race([
+      accountsOnly ? Promise.resolve([]) : Promise.race([
         getEmployeeDirectory().catch(() => []),
         new Promise<[]>((resolve) => setTimeout(() => resolve([]), 5000)),
       ]),
@@ -54,7 +66,9 @@ router.get("/", async (_req: Request, res: Response) => {
 
     res.json([...tmsRows, ...hrmsRows]);
   } catch {
-    res.status(500).json({ error: "Failed to fetch users" });
+    res.status(activeEmployees ? 503 : 500).json({
+      error: activeEmployees ? "The WiseWork employee directory is unavailable." : "Failed to fetch users",
+    });
   }
 });
 
@@ -397,8 +411,8 @@ router.get("/:id/stats", async (req: Request<{ id: string }>, res: Response) => 
           _count: { rating: true },
         }),
         prisma.ticket.findMany({
-          where: { assignedToId: id, status: STATUS.CLOSED },
-          select: { createdAt: true, updatedAt: true },
+          where: { assignedToId: id, status: STATUS.CLOSED, resolvedAt: { not: null } },
+          select: { createdAt: true, resolvedAt: true },
         }),
         prisma.ticket.findMany({
           where: { assignedToId: id },
@@ -406,7 +420,7 @@ router.get("/:id/stats", async (req: Request<{ id: string }>, res: Response) => 
           take: 30,
           select: {
             ticketId: true, title: true, status: true, priority: true,
-            type: true, hrmsProjectName: true, createdAt: true, updatedAt: true, rating: true,
+            type: true, hrmsProjectName: true, createdAt: true, updatedAt: true, resolvedAt: true, rating: true,
           },
         }),
         prisma.$queryRaw<Array<{ month: string; month_date: Date; opened: bigint; closed: bigint }>>`
@@ -427,7 +441,7 @@ router.get("/:id/stats", async (req: Request<{ id: string }>, res: Response) => 
     const totalClosed   = byStatus.find((r) => r.status === STATUS.CLOSED)?._count.status ?? 0;
     const avgResolutionMs =
       closedTickets.length > 0
-        ? closedTickets.reduce((s, t) => s + (t.updatedAt.getTime() - t.createdAt.getTime()), 0) /
+        ? closedTickets.reduce((s, t) => s + ((t.resolvedAt ? t.resolvedAt.getTime() - t.createdAt.getTime() : 0)), 0) /
           closedTickets.length
         : null;
 
@@ -459,7 +473,7 @@ router.get("/:id/stats", async (req: Request<{ id: string }>, res: Response) => 
         createdAt:      t.createdAt.toISOString(),
         updatedAt:      t.updatedAt.toISOString(),
         resolutionDays: t.status === STATUS.CLOSED
-          ? Math.round((t.updatedAt.getTime() - t.createdAt.getTime()) / (1000 * 60 * 60 * 24))
+          ? Math.round(((t.resolvedAt ? t.resolvedAt.getTime() - t.createdAt.getTime() : 0)) / (1000 * 60 * 60 * 24))
           : null,
         rating: t.rating ?? null,
       })),

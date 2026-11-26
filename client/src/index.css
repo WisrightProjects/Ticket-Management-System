@@ -48,52 +48,70 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
-    /* shadcn system tokens — light */
-    --background: oklch(0.99 0.005 25);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.44 0.20 25);
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.94 0.03 220);
-    --secondary-foreground: oklch(0.20 0.03 230);
-    --muted: oklch(0.962 0.006 240);
-    --muted-foreground: oklch(0.50 0.04 240);
-    --accent: oklch(0.94 0.03 220);
-    --accent-foreground: oklch(0.20 0.03 230);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.88 0.03 220);
-    --input: oklch(0.88 0.03 220);
-    --ring: oklch(0.44 0.20 25);
-    --chart-1: oklch(0.44 0.20 25);
-    --chart-2: oklch(0.55 0.18 150);
-    --chart-3: oklch(0.65 0.18 55);
-    --chart-4: oklch(0.57 0.22 25);
-    --chart-5: oklch(0.55 0.20 290);
-    --radius: 0.5rem;
-    --sidebar: oklch(0.97 0.01 220);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.44 0.20 25);
-    --sidebar-primary-foreground: oklch(1 0 0);
-    --sidebar-accent: oklch(0.94 0.03 220);
-    --sidebar-accent-foreground: oklch(0.20 0.03 230);
-    --sidebar-border: oklch(0.88 0.03 220);
-    --sidebar-ring: oklch(0.44 0.20 25);
+.rt-client-sign-in {
+  background-image: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--rt-active-indicator) 8%, transparent), transparent 64%);
+}
 
-    /* Right Tracker layout tokens — light */
-    --rt-bg:        #fff9f9;
-    --rt-surface:   #ffffff;
-    --rt-surface-2: #fff0f0;
-    --rt-border:    #ffd0d0;
-    --rt-border-2:  #cbd5e1;
-    --rt-text-1:    #1a0000;
-    --rt-text-2:    #4a0a0a;
-    --rt-text-3:    #94a3b8;
-    --rt-accent:    #cc0000;
-    --rt-accent-bg: rgba(204,0,0,0.08);
+.rt-client-sign-in-guide {
+  background-image: radial-gradient(ellipse at 0% 100%, color-mix(in srgb, var(--rt-active-indicator) 16%, transparent), transparent 88%);
+}
+
+:root {
+    --background: #f5f7fb;
+    --foreground: #10234d;
+    --card: #ffffff;
+    --card-foreground: var(--foreground);
+    --popover: var(--card);
+    --popover-foreground: var(--foreground);
+    --primary: #b41523;
+    --primary-foreground: #ffffff;
+    --secondary: #eaf0fb;
+    --secondary-foreground: #142d58;
+    --muted: #eef2f8;
+    --muted-foreground: #52617a;
+    --accent: #fff0f1;
+    --accent-foreground: #901322;
+    --destructive: #a81725;
+    --border: #d8e0ed;
+    --input: #bac8dd;
+    --ring: #234b97;
+    --chart-1: #234b97;
+    --chart-2: #178053;
+    --chart-3: #a45a13;
+    --chart-4: #b41523;
+    --chart-5: #6d44aa;
+    --radius: 0.5rem;
+    --sidebar: var(--rt-nav-bg);
+    --sidebar-foreground: var(--rt-nav-text);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--rt-nav-active);
+    --sidebar-accent-foreground: var(--rt-nav-active-text);
+    --sidebar-border: var(--rt-nav-border);
+    --sidebar-ring: var(--ring);
+
+    --rt-bg: var(--background);
+    --rt-surface: var(--card);
+    --rt-surface-2: var(--muted);
+    --rt-border: var(--border);
+    --rt-border-2: var(--input);
+    --rt-text-1: var(--foreground);
+    --rt-text-2: #293e62;
+    --rt-text-3: var(--muted-foreground);
+    --rt-accent: var(--primary);
+    --rt-accent-hover: #931221;
+    --rt-accent-bg: var(--accent);
+    --rt-danger: var(--destructive);
+    --rt-danger-bg: color-mix(in srgb, var(--destructive) 10%, transparent);
+    --rt-active-indicator: #ed3342;
+    --rt-nav-bg: #081d44;
+    --rt-nav-border: #2b4168;
+    --rt-nav-text: #e9effb;
+    --rt-nav-muted: #aabbd9;
+    --rt-nav-hover: #152e59;
+    --rt-nav-active: #223c69;
+    --rt-nav-active-text: #ffffff;
+    --rt-header-gradient: linear-gradient(110deg, #081d44, #183f80);
 
     /* Status badge tokens — light (dark text for white backgrounds) */
     --status-un-assigned-dot:       #6B7280;
@@ -117,6 +135,58 @@
     --status-closed-dot:            #22C55E;
     --status-closed-text:           #15803D;
     --status-closed-bg:             rgba(34,197,94,0.10);
+    --status-submitted-dot:          #64748b;
+    --status-submitted-text:         #475569;
+    --status-submitted-bg:           #f1f5f9;
+    --status-admin-review-dot:       #3b82f6;
+    --status-admin-review-text:      #1d4ed8;
+    --status-admin-review-bg:        #dbeafe;
+    --status-planning-dot:           #f59e0b;
+    --status-planning-text:          #b45309;
+    --status-planning-bg:            #fef3c7;
+    --status-customer-approval-dot:  #a855f7;
+    --status-customer-approval-text: #7e22ce;
+    --status-customer-approval-bg:   #f3e8ff;
+    --status-approved-dot:           #22c55e;
+    --status-approved-text:          #15803d;
+    --status-approved-bg:            #dcfce7;
+    --status-reopened-dot:           #ea580c;
+    --status-reopened-text:          #9a3412;
+    --status-reopened-bg:            #ffedd5;
+
+    /* Priority badge tokens — light */
+    --priority-low-dot:      #94A3B8;
+    --priority-low-text:     #475569;
+    --priority-low-bg:       rgba(148,163,184,0.10);
+    --priority-medium-dot:   #EAB308;
+    --priority-medium-text:  #854D0E;
+    --priority-medium-bg:    rgba(234,179,8,0.10);
+    --priority-high-dot:     #F97316;
+    --priority-high-text:    #9A3412;
+    --priority-high-bg:      rgba(249,115,22,0.10);
+    --priority-critical-dot:   var(--destructive);
+    --priority-critical-text:  #991B1B;
+    --priority-critical-bg:    color-mix(in oklch, var(--destructive) 10%, transparent);
+
+    /* Ticket type badge tokens — light */
+    --type-bug-dot:            #DC2626;
+    --type-bug-text:           #991B1B;
+    --type-bug-bg:             rgba(220,38,38,0.10);
+    --type-requirement-dot:    #8B5CF6;
+    --type-requirement-text:   #6D28D9;
+    --type-requirement-bg:     rgba(139,92,246,0.10);
+    --type-task-dot:           #64748B;
+    --type-task-text:          #334155;
+    --type-task-bg:            rgba(100,116,139,0.10);
+    --type-support-dot:        #14B8A6;
+    --type-support-text:       #0F766E;
+    --type-support-bg:         rgba(20,184,166,0.10);
+    --type-explanation-dot:    #94A3B8;
+    --type-explanation-text:   #475569;
+    --type-explanation-bg:     rgba(148,163,184,0.10);
+    --type-implementation-dot:  #6366F1;
+    --type-implementation-text: #4338CA;
+    --type-implementation-bg:   rgba(99,102,241,0.10);
 }
 
 

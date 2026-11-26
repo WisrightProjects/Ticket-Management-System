@@ -31,5 +31,9 @@ export async function requireCustomer(req: Request, res: Response, next: NextFun
   });
 
   req.user = { ...user, portalClientId: dbUser?.portalClientId ?? null };
+  req.customerMemberships = await prisma.organizationMembership.findMany({
+    where: { userId: user.id, organization: { isActive: true } },
+    select: { organizationId: true, role: true },
+  });
   next();
 }

@@ -1,20 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { useQuery } from "@tanstack/react-query";
-import {
-  useReactTable,
-  getCoreRowModel,
-  flexRender,
-  createColumnHelper,
-  type SortingState,
-  type PaginationState,
-} from "@tanstack/react-table";
+import { useQuery, useInfiniteQuery, type UseInfiniteQueryResult, type InfiniteData } from "@tanstack/react-query";
 import {
   paginatedTicketsSchema,
   type ApiTicket,
   TICKET_TYPE,
   TICKET_TYPES,
-  PRIORITIES,
   STATUSES,
   type TicketTypeValue,
   type PriorityValue,
@@ -26,8 +17,12 @@ import {
   PRIORITY_LABELS,
   STATUS_LABELS,
 } from "@/lib/ticket-badges";
-import { STATUS_CONFIG } from "@/lib/status-config";
+import { STATUS_CONFIG, PRIORITY_CONFIG as SHARED_PRIORITY_CONFIG } from "@/lib/status-config";
 import { TicketSlidePanel } from "@/components/TicketSlidePanel";
+import { PageHeader } from "@/components/PageHeader";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { EmptyState } from "@/components/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -36,11 +31,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { ticketDetailPath } from "@/lib/ticket-navigation";
 import {
   ChevronUp,
   ChevronDown,
-  ChevronsUpDown,
   Eye,
   X,
   Search,
@@ -50,6 +45,7 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 
 // Tab filter buckets — drives the type[] sent to GET /api/tickets
 type TabFilter = "all" | "bug" | "impl" | "reopened";
+type DateView = "today" | "previous" | "all" | "custom";
 const BUG_TYPES: readonly TicketTypeValue[] = [
   TICKET_TYPE.BUG,
   TICKET_TYPE.REQUIREMENT,
@@ -59,237 +55,315 @@ const BUG_TYPES: readonly TicketTypeValue[] = [
 ];
 const IMPL_TYPES: readonly TicketTypeValue[] = [TICKET_TYPE.IMPLEMENTATION];
 
-// ── Semantic design tokens (intentional fixed colors) ─────────────────────────
+// ── Priority display config — derived from the shared PRIORITY_CONFIG tokens ──
 
-const PRIORITY_CONFIG: Record<string, { bar: string; textDark: string; textLight: string }> = {
-  CRITICAL: { bar: "#EF4444", textDark: "#FCA5A5", textLight: "#B91C1C" },
-  HIGH:     { bar: "#F97316", textDark: "#FDBA74", textLight: "#C2410C" },
-  MEDIUM:   { bar: "#EAB308", textDark: "#FDE047", textLight: "#92400E" },
-  LOW:      { bar: "var(--rt-border-2)", textDark: "var(--rt-text-3)", textLight: "var(--rt-text-3)" },
-};
+const PRIORITY_CONFIG: Record<string, { bar: string; textDark: string; textLight: string }> =
+  Object.fromEntries(
+    Object.entries(SHARED_PRIORITY_CONFIG).map(([k, v]) => [
+      k,
+      { bar: v.dot, textDark: v.text, textLight: v.text },
+    ])
+  );
 
-// ── Sort icon ─────────────────────────────────────────────────────────────────
+// ── Sorting ───────────────────────────────────────────────────────────────────
 
-function SortIcon({ direction }: { direction: "asc" | "desc" | false }) {
-  const base = "ml-1 h-3 w-3 inline-block";
-  if (direction === "asc")  return <ChevronUp   className={base} style={{ color: "var(--rt-accent)" }} />;
-  if (direction === "desc") return <ChevronDown  className={base} style={{ color: "var(--rt-accent)" }} />;
-  return <ChevronsUpDown className={base} style={{ color: "var(--rt-text-3)", opacity: 0.5 }} />;
+interface Sorting {
+  id: string;
+  desc: boolean;
 }
 
-// ── Column definitions ────────────────────────────────────────────────────────
-
-const col = createColumnHelper<ApiTicket>();
-
-const columns = [
-  col.accessor("ticketId", {
-    header: "ID",
-    enableSorting: false,
-    cell: (info) => (
-      <Link
-        to={`/tickets/${info.row.original.id}`}
-        className="font-mono text-xs font-semibold"
-        style={{ color: "var(--rt-accent)", textDecoration: "none" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {info.getValue()}
-      </Link>
-    ),
-  }),
-  col.accessor("title", {
-    header: "Subject",
-    enableSorting: false,
-    cell: (info) => {
-      const row = info.row.original;
-      return (
-        <Link
-          to={`/tickets/${row.ticketId}`}
-          className="text-sm font-medium line-clamp-1 transition-colors duration-150"
-          style={{ color: "var(--rt-text-1)", textDecoration: "none" }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--rt-accent)")}
-          onMouseLeave={(e)  => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--rt-text-1)")}
-        >
-          {info.getValue()}
-        </Link>
-      );
-    },
-  }),
-  col.accessor("createdBy", {
-    id: "sender",
-    header: "Sender",
-    enableSorting: false,
-    cell: (info) => {
-      const row   = info.row.original;
-      const name  = row.senderName  ?? info.getValue().name;
-      const email = row.senderEmail ?? row.project;
-      return (
-        <div className="min-w-0">
-          <p className="text-xs font-medium truncate" style={{ color: "var(--rt-text-2)" }}>{name}</p>
-          <p className="text-xs truncate"               style={{ color: "var(--rt-text-3)" }}>{email}</p>
-        </div>
-      );
-    },
-  }),
-  col.accessor("status", {
-    header: "Status",
-    cell: (info) => {
-      const v   = info.getValue();
-      const cfg = STATUS_CONFIG[v] ?? STATUS_CONFIG.CLOSED;
-      return (
-        <span
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold whitespace-nowrap"
-          style={{ background: cfg.bg, color: cfg.text }}
-        >
-          <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: cfg.dot }} />
-          {STATUS_LABELS[v]}
-        </span>
-      );
-    },
-  }),
-  col.accessor("type", {
-    header: "Category",
-    cell: (info) => {
-      const v   = info.getValue();
-      const cls = CATEGORY_CLASS[v];
-      if (cls) {
-        return (
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium ${cls}`}
-          >
-            {CATEGORY_LABELS[v]}
-          </span>
-        );
-      }
-      return (
-        <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>
-          {CATEGORY_LABELS[v]}
-        </span>
-      );
-    },
-  }),
-  col.accessor("priority", {
-    header: "Priority",
-    cell: (info) => {
-      const v   = info.getValue();
-      const cfg = PRIORITY_CONFIG[v] ?? PRIORITY_CONFIG.LOW;
-      return (
-        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: cfg.textDark }}>
-          {PRIORITY_LABELS[v]}
-        </span>
-      );
-    },
-  }),
-  col.accessor("createdAt", {
-    header: "Date",
-    cell: (info) => {
-      const d = new Date(info.getValue());
-      return (
-        <div className="text-xs font-mono" style={{ color: "var(--rt-text-3)" }}>
-          <div>{d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-          <div style={{ color: "var(--rt-text-3)", opacity: 0.7 }}>
-            {d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-          </div>
-        </div>
-      );
-    },
-  }),
-  col.display({
-    id:     "lastCustomerReplyAt",
-    header: "Last Active",
-    cell:   (info) => {
-      const raw = info.row.original.lastCustomerReplyAt;
-      if (!raw) {
-        return <span className="text-xs" style={{ color: "var(--rt-text-3)", opacity: 0.4 }}>—</span>;
-      }
-      const d = new Date(raw);
-      return (
-        <div className="text-xs font-mono" style={{ color: "var(--rt-accent)" }}>
-          <div>{d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-          <div style={{ opacity: 0.8 }}>
-            {d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-          </div>
-        </div>
-      );
-    },
-  }),
+const SORT_FIELDS: { value: string; label: string }[] = [
+  { value: "status", label: "Status" },
+  { value: "type", label: "Category" },
+  { value: "priority", label: "Priority" },
+  { value: "createdAt", label: "Date Created" },
+  { value: "lastCustomerReplyAt", label: "Last Active" },
 ];
 
-// ── Skeleton row ──────────────────────────────────────────────────────────────
+// ── Priority board columns (Critical → Low) ─────────────────────────────────
 
-function SkeletonRow({ colCount }: { colCount: number }) {
-  const widths = ["w-14", "w-48", "w-28", "w-20", "w-16", "w-14", "w-20", "w-20"];
+interface CommonFilters {
+  sorting: Sorting;
+  search: string;
+  status: StatusValue | "";
+  type: readonly TicketTypeValue[] | null;
+  assigneeFilter: string;
+  clientFilter: string;
+  organizationFilter: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+function usePriorityTicketColumn(priority: PriorityValue, filters: CommonFilters, pageSize = 10) {
+  return useInfiniteQuery({
+    queryKey: [
+      "tickets", "board", priority, filters.sorting, filters.search,
+      filters.status, filters.type, filters.assigneeFilter,
+      filters.clientFilter, filters.organizationFilter, filters.dateFrom, filters.dateTo,
+    ],
+    queryFn: async ({ pageParam }: { pageParam: number }) => {
+      const params = new URLSearchParams({
+        sortBy:   filters.sorting.id,
+        sortOrder: filters.sorting.desc ? "desc" : "asc",
+        page:     String(pageParam),
+        pageSize: String(pageSize),
+        priority,
+      });
+      if (filters.search) params.set("search", filters.search);
+      if (filters.status) params.set("status", filters.status);
+      if (filters.type) {
+        for (const t of filters.type) params.append("type", t);
+      }
+      if (filters.assigneeFilter) params.set("assignedToId", filters.assigneeFilter);
+      if (filters.clientFilter)   params.set("clientId", filters.clientFilter);
+      if (filters.organizationFilter) params.set("organizationId", filters.organizationFilter);
+      if (filters.dateFrom)       params.set("from", new Date(`${filters.dateFrom}T00:00:00`).toISOString());
+      if (filters.dateTo)         params.set("to", new Date(`${filters.dateTo}T23:59:59.999`).toISOString());
+      const res = await axios.get(`${API_URL}/api/tickets?${params}`, { withCredentials: true });
+      return paginatedTicketsSchema.parse(res.data);
+    },
+    initialPageParam: 1,
+    getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
+  });
+}
+
+type TicketPage = ReturnType<typeof paginatedTicketsSchema.parse>;
+type ColumnQuery = UseInfiniteQueryResult<InfiniteData<TicketPage>>;
+
+function PriorityColumn({
+  label,
+  q,
+  onQuickView,
+  returnTo,
+}: {
+  priority: PriorityValue;
+  label: string;
+  q: ColumnQuery;
+  onQuickView: (t: ApiTicket) => void;
+  returnTo?: string;
+}) {
+  const tickets = q.data?.pages.flatMap((p: TicketPage) => p.data) ?? [];
+  const total   = q.data?.pages[0]?.total;
+
   return (
-    <tr style={{ borderBottom: "1px solid var(--rt-border)" }}>
-      {Array.from({ length: colCount }).map((_, i) => (
-        <td key={i} className="px-4 py-4">
-          <div
-            className={`h-3 rounded animate-pulse ${widths[i % widths.length]}`}
-            style={{ background: "var(--rt-border)" }}
-          />
-        </td>
-      ))}
-    </tr>
+    <div
+      className="flex flex-col flex-shrink-0 snap-center sm:flex-1 sm:min-w-[280px] w-[85vw] max-w-[340px] sm:w-auto sm:max-w-none rounded-xl overflow-hidden"
+      style={{ border: "1px solid var(--rt-border)", background: "var(--rt-surface)", maxHeight: "calc(100vh - 260px)" }}
+    >
+      <div className="flex items-center justify-between px-3 py-2.5 flex-shrink-0" style={{ borderBottom: "1px solid var(--rt-border)" }}>
+        <span data-testid="priority-column-label" className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--rt-text-2)" }}>
+          {label}
+        </span>
+        <span
+          className="text-xs font-semibold px-2 py-0.5 rounded-full"
+          style={{ background: "var(--rt-surface-2)", color: "var(--rt-text-2)" }}
+        >
+          {q.isLoading ? "…" : total}
+        </span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {q.isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <TicketCardSkeleton key={i} />)
+        ) : tickets.length === 0 ? (
+          <EmptyState icon={Search} title={`No ${label} tickets`} />
+        ) : (
+          <>
+            {tickets.map((ticket) => (
+              <TicketCard key={ticket.id} ticket={ticket} onQuickView={onQuickView} returnTo={returnTo} />
+            ))}
+            {q.hasNextPage && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={q.isFetchingNextPage}
+                onClick={() => q.fetchNextPage()}
+              >
+                {q.isFetchingNextPage ? "Loading…" : "Load more"}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Ticket card ───────────────────────────────────────────────────────────────
+
+function TicketCard({ ticket, onQuickView, returnTo }: { ticket: ApiTicket; onQuickView: (t: ApiTicket) => void; returnTo?: string }) {
+  const sc = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.CLOSED;
+  const pc = PRIORITY_CONFIG[ticket.priority] ?? PRIORITY_CONFIG.LOW;
+  const created = new Date(ticket.createdAt);
+  const lastActive = ticket.lastCustomerReplyAt ? new Date(ticket.lastCustomerReplyAt) : null;
+
+  return (
+    <Link
+      to={ticketDetailPath(ticket.ticketId, returnTo)}
+      data-testid="ticket-card"
+      className="block rounded-xl p-4 transition-colors bg-[var(--rt-surface)] hover:bg-[var(--rt-surface-2)] no-underline"
+      style={{ border: "1px solid var(--rt-border)" }}
+    >
+      {/* Row 1: ID + Status + Quick view */}
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <span className="font-mono text-xs font-semibold" style={{ color: "var(--rt-accent)" }}>
+          {ticket.ticketId}
+        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap"
+            style={{ background: sc.bg, color: sc.text }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: sc.dot }} />
+            {STATUS_LABELS[ticket.status]}
+          </span>
+          <button
+            data-testid="ticket-card-quickview"
+            title="Quick view"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onQuickView(ticket);
+            }}
+            className="p-1 rounded-md opacity-40 hover:opacity-100 transition-opacity"
+            style={{ color: "var(--rt-text-2)" }}
+          >
+            <Eye className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Row 2: Subject */}
+      <p className="text-sm font-semibold mb-2 line-clamp-1" style={{ color: "var(--rt-text-1)" }}>
+        {ticket.title}
+      </p>
+
+      {/* Row 3: Sender */}
+      <div className="flex items-center gap-1 mb-3 min-w-0">
+        <p className="text-xs font-medium truncate" style={{ color: "var(--rt-text-2)" }}>
+          {ticket.senderName ?? ticket.createdBy?.name}
+        </p>
+        <span className="text-xs flex-shrink-0" style={{ color: "var(--rt-text-3)" }}>·</span>
+        <p className="text-xs truncate" style={{ color: "var(--rt-text-3)" }}>
+          {ticket.senderEmail ?? ticket.project}
+        </p>
+      </div>
+
+      {/* Row 4: Priority + Category + Date */}
+      <div className="flex items-center gap-3 flex-wrap mb-2">
+        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: pc.textDark }}>
+          {PRIORITY_LABELS[ticket.priority]}
+        </span>
+        {CATEGORY_CLASS[ticket.type] ? (
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium ${CATEGORY_CLASS[ticket.type]}`}
+          >
+            {CATEGORY_LABELS[ticket.type]}
+          </span>
+        ) : (
+          <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>
+            {CATEGORY_LABELS[ticket.type]}
+          </span>
+        )}
+        <span className="text-xs font-mono ml-auto whitespace-nowrap" style={{ color: "var(--rt-text-3)" }}>
+          {created.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}{" "}
+          {created.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+        </span>
+      </div>
+
+      {/* Row 5: Last active */}
+      <div
+        className="text-xs font-mono pt-2"
+        style={{
+          borderTop: "1px solid var(--rt-border)",
+          color: lastActive ? "var(--rt-accent)" : "var(--rt-text-3)",
+          opacity: lastActive ? 1 : 0.6,
+        }}
+      >
+        Last active:{" "}
+        {lastActive
+          ? `${lastActive.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ${lastActive.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
+          : "—"}
+      </div>
+    </Link>
+  );
+}
+
+function TicketCardSkeleton() {
+  return (
+    <div className="rounded-xl p-4" style={{ background: "var(--rt-surface)", border: "1px solid var(--rt-border)" }}>
+      <div className="flex items-center justify-between mb-3">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-4 w-20 rounded-full" />
+      </div>
+      <Skeleton className="h-3 w-48 mb-2" />
+      <Skeleton className="h-3 w-32 mb-3" />
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-3 w-12" />
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-20 ml-auto" />
+      </div>
+    </div>
   );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-function Tickets() {
-  "use no memo";
+function localDateInput(date: Date) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
 
+function readFilter<T extends string>(params: URLSearchParams, key: string, choices: readonly T[], fallback: T): T {
+  return choices.find((choice) => choice === params.get(key)) ?? fallback;
+}
+
+function readDate(params: URLSearchParams, key: string) {
+  const date = params.get(key) ?? "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(new Date(`${date}T00:00:00`).getTime()) ? date : "";
+}
+
+function Tickets() {
   const [searchParams] = useSearchParams();
 
-  const [sorting, setSorting]       = useState<SortingState>([{ id: "createdAt", desc: true }]);
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
-  const [searchInput, setSearchInput]       = useState("");
-  const [search, setSearch]                 = useState("");
-  const [tabFilter, setTabFilter]           = useState<TabFilter>("all");
-  const [statusFilter, setStatusFilter]     = useState<StatusValue | "">("");
-  const [priorityFilter, setPriorityFilter] = useState<PriorityValue | "">("");
-  const [typeFilter, setTypeFilter]         = useState<TicketTypeValue | "">("");
-  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [sorting, setSorting] = useState<Sorting>(() => ({
+    id: readFilter(searchParams, "sortBy", SORT_FIELDS.map(({ value }) => value), "createdAt"),
+    desc: searchParams.get("sortOrder") !== "asc",
+  }));
+  const [searchInput, setSearchInput]       = useState(searchParams.get("search")?.slice(0, 200) ?? "");
+  const [search, setSearch]                 = useState(searchInput.trim());
+  const [tabFilter, setTabFilter]           = useState<TabFilter>(() => readFilter(searchParams, "tab", ["all", "bug", "impl", "reopened"], "all"));
+  const [statusFilter, setStatusFilter]     = useState<StatusValue | "">(() => readFilter(searchParams, "status", ["", ...STATUSES], ""));
+  const [typeFilter, setTypeFilter]         = useState<TicketTypeValue | "">(() => readFilter(searchParams, "type", ["", ...TICKET_TYPES], ""));
+  const [assigneeFilter, setAssigneeFilter] = useState(searchParams.get("assignedToId") ?? "");
   const [clientFilter,  setClientFilter]   = useState(searchParams.get("clientId") ?? "");
-  const [dateFrom, setDateFrom]             = useState("");
-  const [dateTo, setDateTo]                 = useState("");
+  const [organizationFilter, setOrganizationFilter] = useState(searchParams.get("organizationId") ?? "");
+  const [dateFrom, setDateFrom]             = useState(() => readDate(searchParams, "from"));
+  const [dateTo, setDateTo]                 = useState(() => readDate(searchParams, "to"));
+  const [dateView, setDateView] = useState<DateView>(() => readFilter(searchParams, "date", ["today", "previous", "all", "custom"], "today"));
+  const now = new Date();
+  const today = localDateInput(now);
+  const yesterday = localDateInput(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
   const [selectedTicket, setSelectedTicket] = useState<ApiTicket | null>(null);
   const closePanel = useCallback(() => setSelectedTicket(null), []);
-  const navigate = useNavigate();
-
-  const allColumns = useMemo(
-    () => [
-      ...columns,
-      col.display({
-        id: "actions",
-        header: "Action",
-        enableSorting: false,
-        cell: (info) => (
-          <button
-            onClick={(e) => { e.stopPropagation(); setSelectedTicket(info.row.original); }}
-            className="p-1 rounded-md opacity-30 hover:opacity-100 transition-opacity"
-            style={{ color: "var(--rt-text-2)" }}
-            title="Quick view"
-          >
-            <Eye className="h-4 w-4" />
-          </button>
-        ),
-      }),
-    ],
-    [setSelectedTicket]
-  );
+  const returnFilters = new URLSearchParams();
+  for (const [key, value] of Object.entries({
+    search: searchInput.trim(), tab: tabFilter === "all" ? "" : tabFilter,
+    status: statusFilter, type: typeFilter, assignedToId: assigneeFilter, clientId: clientFilter, organizationId: organizationFilter,
+    date: dateView === "today" ? "" : dateView, from: dateView === "custom" ? dateFrom : "", to: dateView === "custom" ? dateTo : "",
+    sortBy: sorting.id === "createdAt" ? "" : sorting.id, sortOrder: sorting.desc ? "" : "asc",
+  })) {
+    if (value) returnFilters.set(key, value);
+  }
+  const returnTo = returnFilters.size ? `/tickets?${returnFilters}` : undefined;
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput.trim()), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  useEffect(() => {
-    setPagination((p) => ({ ...p, pageIndex: 0 }));
-  }, [search, tabFilter, statusFilter, priorityFilter, typeFilter, assigneeFilter, clientFilter, dateFrom, dateTo]);
-
   const hasFilters =
-    search !== "" || statusFilter !== "" || priorityFilter !== "" || typeFilter !== "" ||
-    assigneeFilter !== "" || clientFilter !== "" || dateFrom !== "" || dateTo !== "";
+    search !== "" || statusFilter !== "" || typeFilter !== "" ||
+    assigneeFilter !== "" || clientFilter !== "" || organizationFilter !== "" || dateView !== "today";
 
   // Effective type filter sent to the server. Tabs win when active so the user
   // doesn't see contradictory filters (the dropdown is hidden in those tabs).
@@ -307,8 +381,19 @@ function Tickets() {
 
   function clearFilters() {
     setSearchInput(""); setSearch("");
-    setStatusFilter(""); setPriorityFilter(""); setTypeFilter("");
+    setStatusFilter(""); setTypeFilter("");
     setAssigneeFilter(""); setClientFilter(""); setDateFrom(""); setDateTo("");
+    setOrganizationFilter("");
+    setDateView("today");
+  }
+
+  function changeSortField(id: string | null) {
+    if (!id) return;
+    setSorting((s) => ({ ...s, id }));
+  }
+
+  function toggleSortDirection() {
+    setSorting((s) => ({ ...s, desc: !s.desc }));
   }
 
   const { data: agentUsers = [] } = useQuery({
@@ -329,79 +414,52 @@ function Tickets() {
     staleTime: 5 * 60_000,
   });
 
-  const { data: result, isLoading, isError } = useQuery({
-    queryKey: ["tickets", sorting, pagination, search, tabFilter, statusFilter, priorityFilter, typeFilter, assigneeFilter, clientFilter, dateFrom, dateTo],
-    queryFn: async () => {
-      const sortCol = sorting[0]?.id ?? "createdAt";
-      const sortDir = sorting[0]?.desc !== false ? "desc" : "asc";
-      const params  = new URLSearchParams({
-        sortBy: sortCol, sortOrder: sortDir,
-        page:     String(pagination.pageIndex + 1),
-        pageSize: String(pagination.pageSize),
-      });
-      if (search)                 params.set("search",       search);
-      if (effectiveStatusFilter) params.set("status",       effectiveStatusFilter);
-      if (priorityFilter)        params.set("priority",     priorityFilter);
-      // Repeated `type` query params produce an array filter on the server
-      // (ticketQuerySchema accepts string | string[] and normalises to string[]).
-      if (effectiveTypeFilter) {
-        for (const t of effectiveTypeFilter) params.append("type", t);
-      }
-      if (assigneeFilter) params.set("assignedToId", assigneeFilter);
-      if (clientFilter)   params.set("clientId",     clientFilter);
-      if (dateFrom)       params.set("from",          dateFrom);
-      if (dateTo)         params.set("to",            dateTo);
-      const res = await axios.get(`${API_URL}/api/tickets?${params}`, { withCredentials: true });
-      return paginatedTicketsSchema.parse(res.data);
-    },
-  });
+  const commonFilters: CommonFilters = {
+    sorting, search,
+    status: effectiveStatusFilter,
+    type:   effectiveTypeFilter,
+    assigneeFilter, clientFilter, organizationFilter,
+    dateFrom: dateView === "today" ? today : dateView === "custom" ? dateFrom : "",
+    dateTo: dateView === "today" ? today : dateView === "previous" ? yesterday : dateView === "custom" ? dateTo : "",
+  };
 
-  const tickets    = result?.data       ?? [];
-  const total      = result?.total      ?? 0;
-  const totalPages = result?.totalPages ?? 1;
+  const criticalQ = usePriorityTicketColumn("CRITICAL", commonFilters);
+  const highQ     = usePriorityTicketColumn("HIGH",     commonFilters);
+  const mediumQ   = usePriorityTicketColumn("MEDIUM",   commonFilters);
+  const lowQ      = usePriorityTicketColumn("LOW",      commonFilters);
 
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
-    data: tickets,
-    columns: allColumns,
-    state: { sorting, pagination },
-    onSortingChange: (upd) => {
-      setSorting(upd);
-      setPagination((p) => ({ ...p, pageIndex: 0 }));
-    },
-    onPaginationChange: setPagination,
-    manualSorting:     true,
-    manualPagination:  true,
-    pageCount:         totalPages,
-    getCoreRowModel:   getCoreRowModel(),
-  });
+  const columns: { priority: PriorityValue; label: string; q: ColumnQuery }[] = [
+    { priority: "CRITICAL", label: PRIORITY_LABELS.CRITICAL, q: criticalQ },
+    { priority: "HIGH",     label: PRIORITY_LABELS.HIGH,     q: highQ },
+    { priority: "MEDIUM",   label: PRIORITY_LABELS.MEDIUM,   q: mediumQ },
+    { priority: "LOW",      label: PRIORITY_LABELS.LOW,      q: lowQ },
+  ];
+
+  const isLoading = columns.some((c) => c.q.isLoading);
+  const isError   = columns.some((c) => c.q.isError);
+  const allLoaded = columns.every((c) => c.q.data);
+  const total     = allLoaded ? columns.reduce((sum, c) => sum + (c.q.data!.pages[0]?.total ?? 0), 0) : 0;
 
   return (
     <>
     <div className="px-4 sm:px-6 py-4 sm:py-8">
 
-        {/* ── Page header ── */}
-        <div className="mb-7">
-          <div className="flex items-center gap-3">
-            <h1
-              className="text-2xl sm:text-3xl font-bold tracking-tight"
-              style={{ color: "var(--rt-text-1)" }}
-            >
+        <PageHeader
+          title={
+            <>
               Tickets
-            </h1>
-            {!isLoading && (
-              <span
-                className="text-sm font-semibold px-2.5 py-0.5 rounded-full"
-                style={{ background: "var(--rt-accent-bg)", color: "var(--rt-accent)", border: "1px solid var(--rt-accent)" }}
-              >
-                {total.toLocaleString()}
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-sm" style={{ color: "var(--rt-text-3)" }}>
-            Manage and track all incoming support requests
-          </p>
-        </div>
+              {!isLoading && (
+                <span
+                  data-testid="ticket-total-pill"
+                  className="text-sm font-semibold px-2.5 py-0.5 rounded-full bg-[var(--rt-accent-bg)] text-[var(--rt-accent)] border border-[var(--rt-accent)]"
+                >
+                  {total.toLocaleString()}
+                </span>
+              )}
+            </>
+          }
+          subtitle="Manage and track all incoming support requests"
+        />
 
         {/* ── Type tabs ── */}
         <div className="flex flex-wrap items-center gap-2 mb-4" role="tablist" aria-label="Ticket type tabs">
@@ -512,34 +570,10 @@ function Tickets() {
             </Select>
           )}
 
-          {/* Priority filter */}
-          <Select
-            value={priorityFilter}
-            onValueChange={(v) => setPriorityFilter((v as string) === "all" ? "" : (v as PriorityValue))}
-          >
-            <SelectTrigger
-              className="h-8 text-xs rounded-lg px-3 border w-full sm:w-[136px]"
-              style={{
-                background: "var(--rt-surface)",
-                border:     "1px solid var(--rt-border)",
-                color:      priorityFilter ? "var(--rt-text-2)" : "var(--rt-text-3)",
-                boxShadow:  "none",
-              }}
-            >
-              <SelectValue placeholder="All priorities" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">All priorities</SelectItem>
-              {PRIORITIES.map((p) => (
-                <SelectItem key={p} value={p} className="text-xs">{PRIORITY_LABELS[p]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           {/* Client filter */}
           <Select
             value={clientFilter}
-            onValueChange={(v) => setClientFilter(!v || v === "all" ? "" : v)}
+            onValueChange={(v) => { setOrganizationFilter(""); setClientFilter(!v || v === "all" ? "" : v); }}
           >
             <SelectTrigger
               className="h-8 text-xs rounded-lg px-3 w-full sm:w-[160px]"
@@ -553,7 +587,7 @@ function Tickets() {
               <span className="truncate">
                 {clientFilter
                   ? (clientList.find((c) => c.id === clientFilter)?.name ?? "Loading…")
-                  : "All clients"}
+                  : organizationFilter ? "Company workspace" : "All clients"}
               </span>
             </SelectTrigger>
             <SelectContent>
@@ -589,12 +623,23 @@ function Tickets() {
             </SelectContent>
           </Select>
 
-          {/* Date range — From / To */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Ticket creation date" className="flex flex-wrap gap-2">
+            {([
+              ["today", "Today"], ["previous", "Previous tickets"], ["all", "All time"], ["custom", "Date range"],
+            ] as const).map(([value, label]) => (
+              <Button key={value} type="button" size="sm" variant={dateView === value ? "default" : "outline"}
+                aria-pressed={dateView === value} onClick={() => setDateView(value)}>
+                {label}
+              </Button>
+            ))}
+          </div>
+          {dateView === "custom" && <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>From</span>
               <input
                 type="date"
+                aria-label="From date"
+                max={dateTo || undefined}
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
                 className="h-8 text-xs rounded-lg px-2 outline-none"
@@ -609,6 +654,8 @@ function Tickets() {
               <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>To</span>
               <input
                 type="date"
+                aria-label="To date"
+                min={dateFrom || undefined}
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
                 className="h-8 text-xs rounded-lg px-2 outline-none"
@@ -619,25 +666,47 @@ function Tickets() {
                 }}
               />
             </div>
+          </div>}
+
+          {/* Sort control */}
+          <div className="flex items-center gap-1.5">
+            <Select value={sorting.id} onValueChange={changeSortField}>
+              <SelectTrigger
+                data-testid="sort-select-trigger"
+                className="h-8 text-xs rounded-lg px-3 border w-full sm:w-[150px]"
+                style={{
+                  background: "var(--rt-surface)",
+                  border:     "1px solid var(--rt-border)",
+                  color:      "var(--rt-text-2)",
+                  boxShadow:  "none",
+                }}
+              >
+                <span className="truncate">
+                  {SORT_FIELDS.find((f) => f.value === sorting.id)?.label ?? "Sort by"}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_FIELDS.map((f) => (
+                  <SelectItem key={f.value} value={f.value} className="text-xs">{f.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="sort-direction-toggle"
+              aria-label={sorting.desc ? "Sort descending" : "Sort ascending"}
+              onClick={toggleSortDirection}
+            >
+              {sorting.desc ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+            </Button>
           </div>
 
           {hasFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 ml-auto transition-all duration-150"
-              style={{
-                color:      "var(--rt-text-3)",
-                background: "var(--rt-surface)",
-                border:     "1px solid var(--rt-border)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.color       = "#EF4444";
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(239,68,68,0.25)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.color       = "var(--rt-text-3)";
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--rt-border-2)";
-              }}
+              className="flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 ml-auto transition-colors duration-150 text-[var(--rt-text-3)] bg-[var(--rt-surface)] border border-[var(--rt-border)] hover:text-destructive hover:border-destructive/25"
             >
               <X className="h-3 w-3" />
               Clear filters
@@ -647,230 +716,29 @@ function Tickets() {
 
         {/* ── Error state ── */}
         {isError && (
-          <div
-            className="text-sm py-3 px-4 rounded-lg mb-4"
-            style={{
-              background: "rgba(239,68,68,0.08)",
-              color:      "#EF4444",
-              border:     "1px solid rgba(239,68,68,0.18)",
-            }}
-          >
-            Failed to load tickets. Please refresh the page.
-          </div>
+          <ErrorBanner message="Failed to load tickets. Please refresh the page." className="mb-4" />
         )}
 
-        {/* ── Mobile card list (< md) ── */}
+        {/* ── Priority board ── */}
         {!isError && (
-          <div className="flex flex-col gap-2 md:hidden" aria-hidden="true">
-            {isLoading
-              ? Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="rounded-xl p-4 animate-pulse" style={{ background: "var(--rt-surface)", border: "1px solid var(--rt-border)" }}>
-                    <div className="h-3 rounded w-20 mb-3" style={{ background: "var(--rt-border)" }} />
-                    <div className="h-3 rounded w-48 mb-2" style={{ background: "var(--rt-border)" }} />
-                    <div className="h-3 rounded w-32" style={{ background: "var(--rt-border)" }} />
-                  </div>
-                ))
-              : tickets.length === 0
-              ? (
-                  <div className="py-16 text-center">
-                    <p className="text-sm" style={{ color: "var(--rt-text-3)" }}>
-                      {hasFilters ? "No tickets match your filters" : "No tickets yet"}
-                    </p>
-                    {hasFilters && (
-                      <button onClick={clearFilters} className="text-xs mt-2" style={{ color: "var(--rt-accent)" }}>
-                        Clear filters
-                      </button>
-                    )}
-                  </div>
-                )
-              : tickets.map((ticket) => {
-                  const sc = STATUS_CONFIG[ticket.status] ?? STATUS_CONFIG.CLOSED;
-                  const pc = PRIORITY_CONFIG[ticket.priority] ?? PRIORITY_CONFIG.LOW;
-                  return (
-                    <Link
-                      key={ticket.id}
-                      to={`/tickets/${ticket.ticketId}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      <div
-                        className="rounded-xl p-4 transition-colors"
-                        style={{ background: "var(--rt-surface)", border: "1px solid var(--rt-border)" }}
-                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--rt-surface-2)")}
-                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--rt-surface)")}
-                      >
-                        {/* Row 1: ID + Status */}
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono text-xs font-semibold" style={{ color: "var(--rt-accent)" }}>
-                            {ticket.ticketId}
-                          </span>
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold"
-                            style={{ background: sc.bg, color: sc.text }}
-                          >
-                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: sc.dot }} />
-                            {STATUS_LABELS[ticket.status]}
-                          </span>
-                        </div>
-                        {/* Row 2: Subject */}
-                        <p className="text-sm font-semibold mb-2 line-clamp-1" style={{ color: "var(--rt-text-1)" }}>
-                          {ticket.title}
-                        </p>
-                        {/* Row 3: Sender */}
-                        <div className="flex items-center gap-1 mb-3">
-                          <p className="text-xs font-medium" style={{ color: "var(--rt-text-2)" }}>
-                            {ticket.senderName ?? ticket.createdBy?.name}
-                          </p>
-                          <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>·</span>
-                          <p className="text-xs truncate" style={{ color: "var(--rt-text-3)" }}>
-                            {ticket.senderEmail ?? ticket.project}
-                          </p>
-                        </div>
-                        {/* Row 4: Priority + Category + Date */}
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <span className="text-xs font-bold uppercase tracking-wider" style={{ color: pc.textLight }}>
-                            {PRIORITY_LABELS[ticket.priority]}
-                          </span>
-                          {CATEGORY_CLASS[ticket.type] ? (
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded border text-xs font-medium ${CATEGORY_CLASS[ticket.type]}`}
-                            >
-                              {CATEGORY_LABELS[ticket.type]}
-                            </span>
-                          ) : (
-                            <span className="text-xs" style={{ color: "var(--rt-text-3)" }}>
-                              {CATEGORY_LABELS[ticket.type]}
-                            </span>
-                          )}
-                          <span className="text-xs font-mono ml-auto" style={{ color: "var(--rt-text-3)" }}>
-                            {new Date(ticket.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-          </div>
-        )}
-
-        {/* ── Table (md+) ── */}
-        {!isError && (
-          <div className="hidden md:block rounded-xl overflow-x-auto" style={{ border: "1px solid var(--rt-border)" }}>
-            <table className="w-full min-w-[700px]" style={{ borderCollapse: "collapse", background: "var(--rt-surface)" }}>
-              <thead>
-                {table.getHeaderGroups().map((hg) => (
-                  <tr
-                    key={hg.id}
-                    style={{ borderBottom: "1px solid var(--rt-border)", background: "var(--rt-surface-2)" }}
-                  >
-                    {hg.headers.map((header) => {
-                      const canSort = header.column.getCanSort();
-                      const sorted  = header.column.getIsSorted();
-                      return (
-                        <th
-                          key={header.id}
-                          onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                          className={`text-left px-4 py-3.5 text-xs font-bold uppercase tracking-[0.08em] select-none ${
-                            canSort ? "cursor-pointer" : ""
-                          }`}
-                          style={{ color: sorted ? "var(--rt-accent)" : "var(--rt-text-1)" }}
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                          {canSort && <SortIcon direction={sorted} />}
-                        </th>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <SkeletonRow key={i} colCount={columns.length + 1} />
-                  ))
-                ) : table.getRowModel().rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className="py-20 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div
-                          className="w-12 h-12 rounded-full flex items-center justify-center"
-                          style={{ background: "var(--rt-surface-2)", border: "1px solid var(--rt-border-2)" }}
-                        >
-                          <Search className="h-5 w-5" style={{ color: "var(--rt-text-3)" }} />
-                        </div>
-                        <p className="text-sm" style={{ color: "var(--rt-text-3)" }}>
-                          {hasFilters ? "No tickets match your filters" : "No tickets yet"}
-                        </p>
-                        {hasFilters && (
-                          <button
-                            onClick={clearFilters}
-                            className="text-xs transition-colors"
-                            style={{ color: "var(--rt-accent)" }}
-                          >
-                            Clear filters
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map((row) => {
-                    return (
-                      <tr
-                        key={row.id}
-                        style={{ borderBottom: "1px solid var(--rt-border)", transition: "background 0.1s", cursor: "pointer" }}
-                        onClick={() => navigate(`/tickets/${row.original.ticketId}`)}
-                        onMouseEnter={(e) =>
-                          ((e.currentTarget as HTMLElement).style.background = "var(--rt-surface-2)")
-                        }
-                        onMouseLeave={(e) =>
-                          ((e.currentTarget as HTMLElement).style.background = "transparent")
-                        }
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="px-4 py-4">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* ── Pagination ── */}
-        {!isLoading && !isError && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5">
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground">Rows per page</span>
-              <select
-                value={pagination.pageSize}
-                onChange={(e) => setPagination({ pageIndex: 0, pageSize: Number(e.target.value) })}
-                className="text-xs outline-none rounded-md px-2 py-1 cursor-pointer border"
-              >
-                {[10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground">
-                {total} tickets · page {pagination.pageIndex + 1} of {totalPages || 1}
-              </span>
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()}>
-                  Previous
-                </Button>
-                <Button variant="outline" size="sm" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>
-                  Next
-                </Button>
-              </div>
+          <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:-mx-6 sm:px-6 snap-x snap-mandatory sm:snap-none">
+            <div className="flex gap-4">
+              {columns.map((col) => (
+                <PriorityColumn
+                  key={col.priority}
+                  priority={col.priority}
+                  label={col.label}
+                  q={col.q}
+                  onQuickView={setSelectedTicket}
+                  returnTo={returnTo}
+                />
+              ))}
             </div>
           </div>
         )}
     </div>
 
-    <TicketSlidePanel ticket={selectedTicket} onClose={closePanel} />
+    <TicketSlidePanel ticket={selectedTicket} onClose={closePanel} returnTo={returnTo} />
     </>
   );
 }

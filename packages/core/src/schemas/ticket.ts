@@ -51,6 +51,7 @@ export const STATUS = {
 // ──────────────────────────────────────
 
 export const apiTicketSchema = z.object({
+  supportPermissions: z.object({ manage: z.boolean().optional(), assign: z.boolean(), reply: z.boolean(), note: z.boolean() }).optional(),
   id:          z.string(),
   ticketId:    z.string(),
   title:       z.string(),
@@ -74,6 +75,11 @@ export const apiTicketSchema = z.object({
   ratingText:           z.string().nullable().optional(),
   estimatedHours:       z.number().nullable().optional(),
   actualHours:          z.number().nullable().optional(),
+  teamId:              z.string().nullable().optional(),
+  team:                z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  dueAt:               z.string().nullable().optional(),
+  organization:        z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  resolutionSummary:   z.string().nullable().optional(),
   attachments:          z.array(z.object({
     id:        z.string(),
     filename:  z.string(),
@@ -125,6 +131,7 @@ export const ticketFilterSchema = z.object({
     .transform((v) => (Array.isArray(v) ? v : v ? [v] : undefined)),
   assignedToId: z.string().optional(),   // user UUID or "unassigned"
   clientId:     z.string().optional(),   // hrmsClientId value
+  organizationId: z.string().max(128).optional(),
   from:         z.string().optional(),   // ISO date string
   to:           z.string().optional(),   // ISO date string
 });
@@ -202,6 +209,7 @@ export type AssignTicketInput = z.infer<typeof assignTicketSchema>;
 
 export const updateStatusSchema = z.object({
   status: z.enum(STATUSES),
+  resolutionSummary: z.string().trim().min(1).max(5000).optional(),
 });
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
 
@@ -293,6 +301,7 @@ export type RequestMoreInfoInput = z.infer<typeof requestMoreInfoSchema>;
 export const INTERNAL_TICKET_TYPES = ["BUG", "REQUIREMENT", "TASK", "SUPPORT", "EXPLANATION"] as const;
 
 export const internalSubmitSchema = z.object({
+  projectId:   z.string().regex(/^[\w-]{1,128}$/).optional(),
   title:       z.string().min(1, "Title is required").max(255),
   description: z.string().min(1, "Description is required").max(10000),
   type:        z.enum(INTERNAL_TICKET_TYPES),
@@ -315,7 +324,18 @@ export type InternalSubmitInput = z.infer<typeof internalSubmitSchema>;
  */
 export function legalNextStatuses(current: StatusValue, type: TicketTypeValue): StatusValue[] {
   // For non-IMPLEMENTATION tickets, all statuses are legal (current behaviour).
-  if (type !== TICKET_TYPE.IMPLEMENTATION) return [...STATUSES];
+  if (type !== TICKET_TYPE.IMPLEMENTATION) {
+    const transitions: Partial<Record<StatusValue, StatusValue[]>> = {
+      UN_ASSIGNED: [STATUS.OPEN_NOT_STARTED],
+      OPEN_NOT_STARTED: [STATUS.OPEN_IN_PROGRESS, STATUS.WAITING_FOR_CLIENT],
+      OPEN_IN_PROGRESS: [STATUS.OPEN_QA, STATUS.OPEN_DONE, STATUS.WAITING_FOR_CLIENT],
+      OPEN_QA: [STATUS.OPEN_IN_PROGRESS, STATUS.OPEN_DONE],
+      WAITING_FOR_CLIENT: [STATUS.OPEN_NOT_STARTED, STATUS.OPEN_IN_PROGRESS],
+      OPEN_DONE: [STATUS.CLOSED, STATUS.REOPENED], CLOSED: [STATUS.REOPENED],
+      REOPENED: [STATUS.OPEN_IN_PROGRESS],
+    };
+    return [current, ...(transitions[current] ?? [])];
+  }
 
   // Workflow forward neighbours per the canonical contract:
   // SUBMITTED → ADMIN_REVIEW   (admin: Start review)
@@ -339,4 +359,10 @@ export function legalNextStatuses(current: StatusValue, type: TicketTypeValue): 
     case STATUS.REOPENED:           return [STATUS.REOPENED, STATUS.OPEN_IN_PROGRESS];
     default:                        return [current];
   }
+}
+
+/** Status dropdown options; approval and plan posting use dedicated actions. */
+export function statusUpdateOptions(current: StatusValue, type: TicketTypeValue): StatusValue[] {
+  const actionOnly: readonly StatusValue[] = [STATUS.SUBMITTED, STATUS.CUSTOMER_APPROVAL, STATUS.APPROVED];
+  return legalNextStatuses(current, type).filter((next) => next === current || type !== TICKET_TYPE.IMPLEMENTATION || !actionOnly.includes(next));
 }

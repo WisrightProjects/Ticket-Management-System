@@ -32,7 +32,7 @@ function StageIndicator({ status }: { status: string }) {
         <div key={s.key} className="flex items-center gap-2">
           <div
             className={`w-2.5 h-2.5 rounded-full transition-colors ${
-              i <= reachedOrder ? "bg-indigo-600" : "bg-gray-300"
+              i <= reachedOrder ? "bg-indigo-600" : "bg-muted-foreground/30"
             }`}
           />
           <span className={i <= reachedOrder ? "font-medium" : "text-muted-foreground"}>{s.label}</span>

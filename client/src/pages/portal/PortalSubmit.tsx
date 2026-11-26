@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ImageUploadField } from "@/components/portal/ImageUploadField";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -274,26 +275,16 @@ export default function PortalSubmit() {
       >
         <div className="flex items-center justify-between px-4 sm:px-6" style={{ height: "56px" }}>
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center rounded-lg px-5 py-1.5" style={{ background: "#ffffff" }}>
-              <img
-                src="/wisright-logo.png"
-                alt="Right Tracker"
-                style={{ height: "38px", width: "auto", objectFit: "contain" }}
-              />
-            </div>
-            <div style={{ width: "1px", height: "20px", background: "rgba(255,255,255,0.3)" }} />
-            <span className="text-sm font-bold" style={{ color: "#ffffff", whiteSpace: "nowrap" }}>
-              Right Tracker
-              <span className="hidden sm:inline font-normal text-xs ml-1.5" style={{ color: "rgba(255,255,255,0.7)" }}>— WisRight's Support Tool</span>
-            </span>
+            <img
+              src="/right-tracker-logo.png"
+              alt="Right Tracker"
+              className="h-9 w-auto rounded-md bg-white object-contain sm:h-10"
+            />
           </div>
           <div className="flex items-center gap-2">
             <Link
               to={`/portal/${slug}/login`}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150"
-              style={{ color: "#ffffff", border: "1px solid rgba(255,255,255,0.35)", background: "rgba(0,0,0,0.12)" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.22)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.12)"; }}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-150 text-white border border-white/35 bg-black/10 hover:bg-black/20"
             >
               Sign in
             </Link>
@@ -335,11 +326,10 @@ export default function PortalSubmit() {
                     <button
                       type="button"
                       onClick={() => setRequestType("support")}
-                      className={`text-left p-3 rounded-lg border-2 transition-colors ${
-                        requestType === "support"
-                          ? "border-yellow-600 bg-yellow-50/40"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
+                      className="text-left p-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-colors"
+                      style={requestType === "support"
+                        ? { borderColor: "var(--rt-accent)", background: "var(--rt-accent-bg)" }
+                        : undefined}
                     >
                       <div className="font-medium text-sm">Bug / Support</div>
                       <div className="text-xs text-muted-foreground mt-1">
@@ -349,13 +339,12 @@ export default function PortalSubmit() {
                     <button
                       type="button"
                       onClick={() => setRequestType("implementation")}
-                      className={`text-left p-3 rounded-lg border-2 transition-colors ${
-                        requestType === "implementation"
-                          ? "border-indigo-600 bg-indigo-50/40"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
+                      className="text-left p-3 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-colors"
+                      style={requestType === "implementation"
+                        ? { borderColor: "var(--type-implementation-dot)", background: "var(--type-implementation-bg)" }
+                        : undefined}
                     >
-                      <div className="font-medium text-sm text-indigo-700">New Requirement</div>
+                      <div className="font-medium text-sm" style={{ color: "var(--type-implementation-text)" }}>New Requirement</div>
                       <div className="text-xs text-muted-foreground mt-1">
                         Request a new feature. We'll review, plan it, and send it back for your approval.
                       </div>
@@ -518,11 +507,13 @@ export default function PortalSubmit() {
 
                 {/* Server error */}
                 {mutation.isError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-md">
-                    {axios.isAxiosError(mutation.error) && mutation.error.response?.data?.error
-                      ? mutation.error.response.data.error
-                      : "Failed to submit ticket. Please try again."}
-                  </div>
+                  <ErrorBanner
+                    message={
+                      axios.isAxiosError(mutation.error) && mutation.error.response?.data?.error
+                        ? mutation.error.response.data.error
+                        : "Failed to submit ticket. Please try again."
+                    }
+                  />
                 )}
 
                 <Button
@@ -535,11 +526,11 @@ export default function PortalSubmit() {
             </form>
 
             {/* Login link */}
-            <p className="text-center text-sm text-gray-500 mt-6">
+            <p className="text-center text-sm text-muted-foreground mt-6">
               Already have an account?{" "}
               <Link
                 to={`/portal/${slug}/login`}
-                className="text-blue-600 hover:underline font-medium"
+                className="text-[var(--rt-accent)] hover:underline font-medium"
               >
                 Sign in to track your tickets
               </Link>

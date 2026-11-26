@@ -177,14 +177,14 @@ describe("TicketDetail — ticket data rendering", () => {
 
   it("shows Project label with client/project picker", async () => {
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     expect(screen.getByText("Project")).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /client/i })).toBeInTheDocument();
   });
 
   it("shows Created by label + author name (Admin)", async () => {
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     expect(screen.getByText("Created by")).toBeInTheDocument();
     expect(screen.getByText("Admin")).toBeInTheDocument();
   });
@@ -200,7 +200,7 @@ describe("TicketDetail — ticket data rendering", () => {
 
   it("shows Assigned to label", async () => {
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     expect(screen.getByText("Assigned to")).toBeInTheDocument();
   });
 });
@@ -217,7 +217,7 @@ describe("TicketDetail — hours fields rendering", () => {
   it("renders estimated and actual hours as numeric inputs when set", async () => {
     setupGetSuccess({ ...BASE_TICKET, estimatedHours: 8, actualHours: 4 });
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     expect(screen.getByText("Estimated Hours")).toBeInTheDocument();
     expect(screen.getByText("Actual Hours")).toBeInTheDocument();
     expect(screen.getByTestId("estimated-hours-display")).toHaveValue(8);
@@ -227,7 +227,7 @@ describe("TicketDetail — hours fields rendering", () => {
   it("renders empty inputs with em-dash placeholder when both hours fields are null", async () => {
     setupGetSuccess({ ...BASE_TICKET, estimatedHours: null, actualHours: null });
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     expect(screen.getByTestId("estimated-hours-display")).toHaveValue(null);
     expect(screen.getByTestId("actual-hours-display")).toHaveValue(null);
     expect(screen.getByTestId("estimated-hours-display")).toHaveAttribute("placeholder", "—");
@@ -247,21 +247,21 @@ describe("TicketDetail — assignee display", () => {
   it("shows Unassigned when assignedTo is null", async () => {
     setupGetSuccess(BASE_TICKET); // assignedTo: null
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     expect(screen.getByText(/unassigned/i)).toBeInTheDocument();
   });
 
   it("shows the assignee name when assigned", async () => {
     setupGetSuccess(ASSIGNED_TICKET); // assignedTo: Alice Agent
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     expect(screen.getByText("Alice Agent")).toBeInTheDocument();
   });
 
   it("fetches assignable users on mount", async () => {
     setupGetSuccess(BASE_TICKET);
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     expect(mockedAxios.get).toHaveBeenCalledWith(
       expect.stringContaining("/api/tickets/assignable-users"),
       expect.any(Object)
@@ -281,7 +281,7 @@ describe("TicketDetail — status mutation", () => {
 
   it("Status trigger shows the current status label", async () => {
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     const statusRow = screen.getByText("Status").closest("div")!;
     expect(statusRow).toHaveTextContent("Not Started");
   });
@@ -293,7 +293,7 @@ describe("TicketDetail — status mutation", () => {
     });
 
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const statusTrigger = Array.from(triggers).find((t) =>
@@ -321,7 +321,7 @@ describe("TicketDetail — status mutation", () => {
     mockedAxios.patch = vi.fn().mockRejectedValue(new Error("Server error"));
 
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const statusTrigger = Array.from(triggers).find((t) =>
@@ -331,7 +331,7 @@ describe("TicketDetail — status mutation", () => {
 
     const items = document.querySelectorAll('[data-slot="select-item"]');
     const doneItem = Array.from(items).find((i) =>
-      i.textContent?.includes("Done")
+      i.textContent?.includes("In Progress")
     ) as HTMLElement;
     await user.click(doneItem);
 
@@ -353,7 +353,7 @@ describe("TicketDetail — category mutation", () => {
 
   it("Category trigger shows the current type label", async () => {
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
     const categoryRow = screen.getByText("Category").closest("div")!;
     expect(categoryRow).toHaveTextContent("Support");
   });
@@ -365,7 +365,7 @@ describe("TicketDetail — category mutation", () => {
     });
 
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const categoryTrigger = Array.from(triggers).find((t) =>
@@ -393,7 +393,7 @@ describe("TicketDetail — category mutation", () => {
     mockedAxios.patch = vi.fn().mockRejectedValue(new Error("Server error"));
 
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const categoryTrigger = Array.from(triggers).find((t) =>
@@ -428,7 +428,7 @@ describe("TicketDetail — assign mutation", () => {
     mockedAxios.patch = vi.fn().mockResolvedValue({ data: ASSIGNED_TICKET });
 
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const assigneeTrigger = Array.from(triggers).find((t) =>
@@ -454,7 +454,7 @@ describe("TicketDetail — assign mutation", () => {
     mockedAxios.patch = vi.fn().mockResolvedValue({ data: BASE_TICKET });
 
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const assigneeTrigger = Array.from(triggers).find((t) =>
@@ -480,7 +480,7 @@ describe("TicketDetail — assign mutation", () => {
     mockedAxios.patch = vi.fn().mockRejectedValue(new Error("Server error"));
 
     renderMetaSidebar();
-    await screen.findByText("Details");
+    await screen.findByRole("heading", { name: "Properties", exact: true });
 
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const assigneeTrigger = Array.from(triggers).find((t) =>

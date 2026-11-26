@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUploadField } from "@/components/portal/ImageUploadField";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { SectionHeader } from "@/components/SectionHeader";
+import { useReplyDraft } from "@/hooks/useReplyDraft";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -66,6 +68,9 @@ function CommentAttachments({ attachments }: { attachments: CommentAttachment[] 
 
 interface TicketRepliesProps {
   ticketId: string;
+  draftOwnerId?: string;
+  readOnly?: boolean;
+  internalOnly?: boolean;
 }
 
 /**
@@ -73,10 +78,15 @@ interface TicketRepliesProps {
  * Handles the comments query, reply mutation, and all local state.
  * Used on the TicketDetail page below the description section.
  */
-function TicketReplies({ ticketId }: TicketRepliesProps) {
+function TicketReplies({ ticketId, draftOwnerId, readOnly = false, internalOnly = false }: TicketRepliesProps) {
   const queryClient = useQueryClient();
-  const [content, setContent] = useState("");
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [internalSelected, setIsInternal] = useState(false);
+  const isInternal = internalOnly || internalSelected;
+  const draft = useReplyDraft(draftOwnerId, ticketId);
+  const mode = isInternal ? "internal" : "public";
+  const content = draft.get(mode);
+  const setContent = (text: string) => draft.set(mode, text);
 
   // Re-uses the cache populated by TicketDetail — no extra network request
   const { data: ticket } = useQuery({
@@ -89,7 +99,7 @@ function TicketReplies({ ticketId }: TicketRepliesProps) {
     staleTime: 60_000,
   });
 
-  const { data: comments = [], isLoading } = useQuery<ApiComment[]>({
+  const { data: comments = [], isLoading, isError: commentsError } = useQuery<ApiComment[]>({
     queryKey: ["comments", ticketId],
     queryFn: async () => {
       const res = await axios.get(`${API_URL}/api/tickets/${ticketId}/comments`, { withCredentials: true });
@@ -99,58 +109,66 @@ function TicketReplies({ ticketId }: TicketRepliesProps) {
   });
 
   const replyMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (message: { content: string; isInternal: boolean; files: File[] }) => {
       const fd = new FormData();
-      fd.append("content", content);
-      for (const file of attachmentFiles) {
+      fd.append("content", message.content);
+      fd.append("isInternal", String(message.isInternal));
+      for (const file of message.files) {
         fd.append("attachments", file);
       }
       return axios.post(`${API_URL}/api/tickets/${ticketId}/comments`, fd, { withCredentials: true });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["comments", ticketId] });
-      setContent("");
+    onSuccess: (_response, message) => {
+      void queryClient.invalidateQueries({ queryKey: ["comments", ticketId] });
+      void queryClient.invalidateQueries({ queryKey: ["ticket", ticketId] });
+      void queryClient.invalidateQueries({ queryKey: ["staff-queue"] });
+      draft.clearSent(message.isInternal ? "internal" : "public", message.content);
       setAttachmentFiles([]);
     },
   });
 
   const polishMutation = useMutation({
-    mutationFn: (content: string) =>
+    mutationFn: (message: { content: string; mode: "public" | "internal" }) =>
       axios.post<{ polished: string }>(
         `${API_URL}/api/tickets/${ticketId}/polish`,
-        { content },
+        { content: message.content },
         { withCredentials: true },
       ),
-    onSuccess: (res) => setContent(res.data.polished),
+    onSuccess: (res, message) => {
+      if (draft.get(message.mode) === message.content) draft.set(message.mode, res.data.polished);
+    },
   });
 
   return (
     <div>
-      <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
-        Replies{comments.length > 0 && ` (${comments.length})`}
-      </h3>
+      <SectionHeader
+        title={`Replies${comments.length > 0 ? ` (${comments.length})` : ""}`}
+        className="mb-3 normal-case text-sm font-medium"
+      />
 
       <div className="space-y-3 mb-4">
         {/* Agent / subsequent replies */}
         {isLoading && <Skeleton className="h-16 w-full" />}
+        {commentsError && <p role="alert" className="text-sm text-destructive">Unable to load the conversation. Refresh to try again.</p>}
+        {!isLoading && !commentsError && comments.length === 0 && <p className="text-sm text-muted-foreground">No replies yet.</p>}
 
         {!isLoading && comments.map((c) => (
           <div
             key={c.id}
-            className={`border rounded-lg p-4 ${c.senderType === "CUSTOMER" ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-muted/10"}`}
+            className={`border rounded-lg p-4 ${c.isInternal ? "bg-amber-50/60 dark:bg-amber-950/20 border-amber-200" : c.senderType === "CUSTOMER" ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-muted/10"}`}
           >
-            <div className="flex items-center gap-2 mb-2">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="text-sm font-semibold">
                 {c.senderType === "CUSTOMER"
                   ? (ticket?.senderName ?? ticket?.createdBy.name ?? c.author.name)
                   : c.author.name}
               </span>
               <Badge variant="outline" className="text-xs py-0">
-                {SENDER_TYPE_LABELS[c.senderType]}
+                {c.isInternal ? "Internal note" : SENDER_TYPE_LABELS[c.senderType]}
               </Badge>
               <span className="text-xs text-muted-foreground">{formatDate(c.createdAt)}</span>
             </div>
-            <p className="text-sm whitespace-pre-wrap">{c.content}</p>
+            <p className="break-words whitespace-pre-wrap text-sm leading-relaxed">{c.content}</p>
             {c.attachments && c.attachments.length > 0 && (
               <CommentAttachments attachments={c.attachments} />
             )}
@@ -159,28 +177,37 @@ function TicketReplies({ ticketId }: TicketRepliesProps) {
       </div>
 
       {/* Reply form */}
-      <div className="space-y-2 mt-6">
-        <h3 className="text-sm font-medium mb-2">Add Reply</h3>
+      {readOnly ? <p className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">Claim this ticket or ask its assignee to respond. Only the assignee or an administrator can add replies and internal notes.</p> : <fieldset disabled={replyMutation.isPending} className={`min-w-0 space-y-3 rounded-lg border p-3 sm:p-4 ${isInternal ? "border-amber-200 bg-amber-50/50" : "bg-muted/30"}`}>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Message visibility">
+          {!internalOnly && <Button type="button" size="sm" variant={isInternal ? "outline" : "default"} aria-pressed={!isInternal} onClick={() => setIsInternal(false)}>Public reply</Button>}
+          <Button type="button" size="sm" variant={isInternal ? "default" : "outline"} aria-pressed={isInternal} onClick={() => setIsInternal(true)}>Internal note</Button>
+        </div>
+        <p id="reply-visibility" className="text-xs text-muted-foreground">{isInternal ? "Only staff can see this note and its attachments." : "This reply is visible to the customer."}</p>
         <Textarea
+          aria-label={isInternal ? "Write an internal note" : "Write a public reply"}
+          aria-describedby="reply-visibility"
+          className="bg-card"
           placeholder="Write a reply…"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={3}
+          maxLength={5000}
           disabled={replyMutation.isPending}
         />
         <ImageUploadField files={attachmentFiles} onChange={setAttachmentFiles} />
-        <div className="flex items-center gap-2">
+        {draftOwnerId && <p className="text-[11px] text-muted-foreground">Text drafts are kept in this browser tab until sent or signed out. Reattach files after leaving this page.</p>}
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3">
           <Button
             size="sm"
             variant="outline"
-            onClick={() => polishMutation.mutate(content)}
+            onClick={() => polishMutation.mutate({ content, mode })}
             disabled={polishMutation.isPending || content.trim() === ""}
           >
-            {polishMutation.isPending ? "Polishing…" : "✨ Polish"}
+            {polishMutation.isPending ? "Polishing…" : "Polish"}
           </Button>
           <Button
             size="sm"
-            onClick={() => replyMutation.mutate()}
+            onClick={() => replyMutation.mutate({ content, isInternal, files: attachmentFiles })}
             disabled={replyMutation.isPending || content.trim() === ""}
           >
             {replyMutation.isPending ? "Posting…" : "Post Reply"}
@@ -192,7 +219,7 @@ function TicketReplies({ ticketId }: TicketRepliesProps) {
         {polishMutation.isError && (
           <p className="text-xs text-destructive">Failed to polish reply. Please try again.</p>
         )}
-      </div>
+      </fieldset>}
     </div>
   );
 }

@@ -37,6 +37,13 @@ vi.mock("axios");
 
 const mockedAxios = vi.mocked(axios);
 
+async function chooseVisibleOption(name: string) {
+  const option = await screen.findByRole("option", { name, exact: true });
+  await waitFor(() => expect(window.getComputedStyle(option).pointerEvents).not.toBe("none"));
+  await userEvent.click(option);
+}
+
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
@@ -358,8 +365,7 @@ describe("TicketDetail — assign mutation", () => {
     await userEvent.click(assigneeTrigger);
 
     // Click the first real user option (index 1, after "Unassigned")
-    const items = document.querySelectorAll('[data-slot="select-item"]');
-    await userEvent.click(items[1]); // Alice Agent
+    await chooseVisibleOption("Alice Agent"); // Alice Agent
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -383,8 +389,7 @@ describe("TicketDetail — assign mutation", () => {
     await userEvent.click(assigneeTrigger);
 
     // Click the first option — "Unassigned"
-    const items = document.querySelectorAll('[data-slot="select-item"]');
-    await userEvent.click(items[0]); // Unassigned
+    await chooseVisibleOption("Unassigned");
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -406,8 +411,7 @@ describe("TicketDetail — assign mutation", () => {
     const assigneeTrigger = Array.from(triggers).find((t) => t.textContent?.includes("Unassigned")) as HTMLElement;
     await userEvent.click(assigneeTrigger);
 
-    const items = document.querySelectorAll('[data-slot="select-item"]');
-    await userEvent.click(items[1]);
+    await chooseVisibleOption("Alice Agent");
 
     await waitFor(() => {
       expect(screen.getByText(/failed to update assignee/i)).toBeInTheDocument();
@@ -424,8 +428,7 @@ describe("TicketDetail — assign mutation", () => {
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]');
     const assigneeTrigger = Array.from(triggers).find((t) => t.textContent?.includes("Unassigned")) as HTMLElement;
     await userEvent.click(assigneeTrigger);
-    const items = document.querySelectorAll('[data-slot="select-item"]');
-    await userEvent.click(items[1]);
+    await chooseVisibleOption("Alice Agent");
 
     // After successful PATCH, the component re-fetches the ticket (invalidateQueries)
     await waitFor(() => {
@@ -518,9 +521,7 @@ describe("TicketDetail — status dropdown", () => {
     const statusTrigger = Array.from(triggers).find((t) => t.textContent?.includes("Not Started")) as HTMLElement;
     await userEvent.click(statusTrigger);
 
-    const items = document.querySelectorAll('[data-slot="select-item"]');
-    const inProgressItem = Array.from(items).find((i) => i.textContent?.includes("In Progress")) as HTMLElement;
-    await userEvent.click(inProgressItem);
+    await chooseVisibleOption("In Progress");
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -541,9 +542,7 @@ describe("TicketDetail — status dropdown", () => {
     const statusTrigger = Array.from(triggers).find((t) => t.textContent?.includes("Not Started")) as HTMLElement;
     await userEvent.click(statusTrigger);
 
-    const items = document.querySelectorAll('[data-slot="select-item"]');
-    const doneItem = Array.from(items).find((i) => i.textContent?.includes("Done")) as HTMLElement;
-    await userEvent.click(doneItem);
+    await chooseVisibleOption("In Progress");
 
     await waitFor(() => {
       expect(screen.getByText(/failed to update status/i)).toBeInTheDocument();
@@ -580,9 +579,7 @@ describe("TicketDetail — type dropdown", () => {
     const categoryTrigger = Array.from(triggers).find((t) => t.textContent?.includes("Support")) as HTMLElement;
     await userEvent.click(categoryTrigger);
 
-    const items = document.querySelectorAll('[data-slot="select-item"]');
-    const bugItem = Array.from(items).find((i) => i.textContent?.trim() === "Bug") as HTMLElement;
-    await userEvent.click(bugItem);
+    await chooseVisibleOption("Bug");
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -603,9 +600,7 @@ describe("TicketDetail — type dropdown", () => {
     const categoryTrigger = Array.from(triggers).find((t) => t.textContent?.includes("Support")) as HTMLElement;
     await userEvent.click(categoryTrigger);
 
-    const items = document.querySelectorAll('[data-slot="select-item"]');
-    const taskItem = Array.from(items).find((i) => i.textContent?.trim() === "Task") as HTMLElement;
-    await userEvent.click(taskItem);
+    await chooseVisibleOption("Task");
 
     await waitFor(() => {
       expect(screen.getByText(/failed to update category/i)).toBeInTheDocument();

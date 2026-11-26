@@ -1,3 +1,5 @@
+import { unlink } from "node:fs/promises";
+import { canManageTicketOperations, permitsSupportAction, supportProjects, supportTicketScope } from "../lib/support-access.js";
 import { Router, type Request, type Response } from "express";
 import { hashPassword } from "better-auth/crypto";
 import rateLimit from "express-rate-limit";
@@ -6,24 +8,19 @@ import path from "node:path";
 import multer from "multer";
 import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { applyStaffTicketChange, updateTicketMetadata, WorkError } from "../lib/staff-ticket-service.js";
+import { canEditStaffTicket, staffCommentSchema, z } from "@tms/core";
+import { canTransition, changeTicketStatus } from "../lib/ticket-workflow.js";
 import { requireAuth } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
-import { ticketQuerySchema, assignTicketSchema, updateStatusSchema, updateTypeSchema, updatePrioritySchema, updateEstimatedHoursSchema, updateActualHoursSchema, createCommentSchema, polishReplySchema, implementationPlanSchema, requestMoreInfoSchema, STATUS, TICKET_TYPE, ROLES, COMMENT_SENDER_TYPES } from "@tms/core";
+import { ticketQuerySchema, assignTicketSchema, updateStatusSchema, updateTypeSchema, updatePrioritySchema, updateEstimatedHoursSchema, updateActualHoursSchema, polishReplySchema, implementationPlanSchema, requestMoreInfoSchema, STATUS, TICKET_TYPE, ROLES, COMMENT_SENDER_TYPES } from "@tms/core";
 import { Prisma } from "../generated/prisma/client.js";
 import { sendReplyEmail, sendImplementationPlanPostedEmail, sendImplementationMoreInfoRequestedEmail, sendNewTicketNotificationEmail } from "../lib/mailer.js";
 import { notifyWiseworkAssignment, notifyWiseworkPriorityUpdate, syncTicketToWisework } from "../lib/wisework-notifier.js";
-import { getAllClients, getClientProjects, getEmployeeDirectory, getProjectEmployees, type HrmsEmployee } from "../lib/hrms.js";
-import { uploadArray } from "../lib/upload.js";
+import { getAllClients, getClientProjects, getEmployeeDirectory, getProjectEmployees, localClientSnapshot, type HrmsEmployee } from "../lib/hrms.js";
+import { runImageUpload as runUpload } from "../lib/upload.js";
 
 // Wrap multer's callback API into a Promise so we can use await in async routes
-function runUpload(req: Request, res: Response): Promise<void> {
-  return new Promise((resolve, reject) => {
-    uploadArray(req as any, res as any, (err: unknown) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
 
 const router = Router();
 
@@ -52,6 +49,11 @@ const TICKET_SELECT = {
   ratingText:      true,
   estimatedHours:  true,
   actualHours:     true,
+  resolutionSummary: true,
+  dueAt: true,
+  teamId: true,
+  team: { select: { id: true, name: true } },
+  organization: { select: { id: true, name: true } },
   createdAt:       true,
   updatedAt:       true,
   assignedTo:      { select: { id: true, name: true } },
@@ -95,7 +97,7 @@ function serializeHours<T extends TicketWithHours>(t: T): Omit<T, "estimatedHour
 
 // Fire-and-forget: fetch full ticket snapshot and push to WiseWork sync endpoint.
 // Only runs when the ticket is assigned (assignedTo is set).
-async function pushSyncToWisework(ticketId: string, assignedByName: string): Promise<void> {
+export async function pushSyncToWisework(ticketId: string, assignedByName: string, notifyAssignment = false): Promise<void> {
   const baseUrl = process.env.RIGHT_TRACKER_URL ?? process.env.BETTER_AUTH_URL ?? "http://localhost:5173";
   try {
     const t = await prisma.ticket.findUnique({
@@ -112,8 +114,9 @@ async function pushSyncToWisework(ticketId: string, assignedByName: string): Pro
         hrmsProjectName: true,
         senderName:      true,
         assignedTo:      { select: { email: true } },
-        attachments: { select: { filename: true, filepath: true, mimetype: true } },
+        attachments: { where: { OR: [{ commentId: null }, { comment: { isInternal: false } }] }, select: { filename: true, filepath: true, mimetype: true } },
         comments: {
+          where: { isInternal: false },
           select: {
             id: true, content: true, senderType: true,
             author: { select: { name: true } },
@@ -125,6 +128,13 @@ async function pushSyncToWisework(ticketId: string, assignedByName: string): Pro
       },
     });
     if (!t?.assignedTo) return;
+    if (notifyAssignment) {
+      void notifyWiseworkAssignment({
+        employeeEmail: t.assignedTo.email, ticketId, ticketTitle: t.title,
+        ticketUrl: `${baseUrl}/tickets/${ticketId}`, priority: t.priority, assignedByName,
+        description: t.description ?? undefined,
+      });
+    }
     await syncTicketToWisework({
       employeeEmail:   t.assignedTo.email,
       ticketId:        t.ticketId,
@@ -301,6 +311,36 @@ router.use((req, res, next) => {
   next();
 });
 
+
+// Single-ticket edits must enforce the same ownership rules as queue bulk actions.
+router.use("/:id", async (req, res, next) => {
+  const access = req.user!.supportAccess;
+  if (access && !canManageTicketOperations(req.user!)) {
+    if (req.method === "GET" && (req.path === "/" || req.path === "") &&
+      ["clients", "projects", "assignable-users", "stats"].includes(String(req.params.id))) {
+      next();
+      return;
+    }
+    const ticket = await prisma.ticket.findUnique({
+      where: { ticketId: String(req.params.id) }, select: { hrmsProjectId: true },
+    });
+    if (!ticket || !permitsSupportAction(access, ticket.hrmsProjectId, "read")) {
+      res.status(404).json({ error: "Ticket not found" }); return;
+    }
+    if (req.method === "GET" || req.path === "/comments" ||
+      (req.method === "PATCH" && req.path === "/assignee" &&
+        permitsSupportAction(access, ticket.hrmsProjectId, "assign"))) { next(); return; }
+    res.sendStatus(403); return;
+  }
+  if (req.method === "GET" || canManageTicketOperations(req.user!)) { next(); return; }
+  // These editors validate permissions inside the transaction, including self-claim.
+  if (["/assignee", "/priority", "/status"].includes(req.path)) { next(); return; }
+  const ticket = await prisma.ticket.findUnique({ where: { ticketId: String(req.params.id) }, select: { assignedToId: true, teamId: true } });
+  if (!ticket) { res.status(404).json({ error: "Ticket not found" }); return; }
+  if (req.path === "/project" || !canEditStaffTicket(req.user!, ticket)) { res.status(403).json({ error: "Only the assignee or an administrator can make this change" }); return; }
+  next();
+});
+
 const polishLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
@@ -318,14 +358,24 @@ router.get("/", async (req, res) => {
     return;
   }
 
-  const { sortBy, sortOrder, search, status, priority, type, assignedToId, clientId, from, to, page, pageSize } = result.data;
+  const { sortBy, sortOrder, search, status, priority, type, assignedToId, clientId, organizationId, from, to, page, pageSize } = result.data;
 
-  const where: Prisma.TicketWhereInput = {};
+  const where: Prisma.TicketWhereInput = supportTicketScope(req.user!.supportAccess);
   if (search)   where.title    = { contains: search, mode: "insensitive" };
   if (status)   where.status   = status;
   if (priority) where.priority = priority;
   if (type)     where.type     = { in: type };
   if (clientId) where.hrmsClientId = clientId;
+  if (organizationId) {
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId }, select: { hrmsClientId: true },
+    });
+    const linkedClient = organization?.hrmsClientId;
+    const companyScope = linkedClient
+      ? { OR: [{ organizationId }, { organizationId: null, hrmsClientId: linkedClient }] }
+      : { organizationId };
+    where.AND = [companyScope];
+  }
   if (assignedToId === "unassigned") {
     where.assignedToId = null;
   } else if (assignedToId) {
@@ -364,10 +414,12 @@ router.get("/", async (req, res) => {
 
 // GET /api/tickets/clients — all active HRMS clients (falls back to distinct DB clients)
 // Used to populate the client filter dropdown in the admin ticket list
-router.get("/clients", async (_req, res) => {
+router.get("/clients", async (req, res) => {
+  if (supportProjects(req.user!.supportAccess)) { res.sendStatus(403); return; }
   // Try HRMS first — returns ALL clients regardless of whether they have tickets
   const hrmsClients = await getAllClients();
   if (hrmsClients.length > 0) {
+    res.setHeader("X-Client-Directory-Source", localClientSnapshot ? "local-snapshot" : "wisework");
     res.json(hrmsClients.map((c) => ({ id: c.id, name: c.customerName })));
     return;
   }
@@ -379,11 +431,13 @@ router.get("/clients", async (_req, res) => {
     distinct: ["hrmsClientId"],
     orderBy:  { hrmsClientName: "asc" },
   });
-  res.json(rows.map((r) => ({ id: r.hrmsClientId!, name: r.hrmsClientName ?? r.hrmsClientId! })));
+  res.setHeader("X-Client-Directory-Source", "ticket-history");
+  res.json(rows.map((r) => ({ id: r.hrmsClientId!, name: r.hrmsClientName ?? "Organization name unavailable" })));
 });
 
 // GET /api/tickets/projects?clientId= — admin project list for ticket project picker
 router.get("/projects", async (req, res) => {
+  if (supportProjects(req.user!.supportAccess)) { res.sendStatus(403); return; }
   const { clientId } = req.query as { clientId?: string };
   if (!clientId || typeof clientId !== "string") {
     res.status(400).json({ error: "clientId query param required" });
@@ -398,7 +452,9 @@ router.get("/projects", async (req, res) => {
 // Without projectId: all active TMS users + HRMS directory employees.
 // Must be registered BEFORE /:id to avoid "assignable-users" matching as a ticketId param
 router.get("/assignable-users", async (req, res) => {
-  const { projectId } = req.query as { projectId?: string };
+  const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+  const access = req.user!.supportAccess;
+  if (access && !permitsSupportAction(access, projectId ?? null, "assign")) { res.sendStatus(403); return; }
 
   // Only ADMIN and AGENT users can be assigned tickets — never CUSTOMER accounts
   const [users, hrmsEmployees] = await Promise.all([
@@ -409,6 +465,13 @@ router.get("/assignable-users", async (req, res) => {
     }),
     projectId ? getProjectEmployees(projectId) : getEmployeeDirectory(),
   ]);
+
+  if (access) {
+    const projectEmails = new Set(hrmsEmployees.map((employee) => employee.email.toLowerCase()));
+    res.json(users.filter((user) => !projectId || projectEmails.has(user.email.toLowerCase()))
+      .map(({ id, name }) => ({ id, name })));
+    return;
+  }
 
   const tmsEmailSet  = new Set(users.map((u) => u.email.toLowerCase()));
 
@@ -481,6 +544,17 @@ router.get("/assignable-users", async (req, res) => {
 // Optional ?month=YYYY-MM — when present, all counts filter to tickets
 // CREATED in that calendar month (UTC). When absent, all counts are all-time.
 router.get("/stats", async (req, res) => {
+  const projects = supportProjects(req.user!.supportAccess);
+  const scope = supportTicketScope(req.user!.supportAccess);
+  const scoped = prisma.$extends({
+    query: { ticket: { $allOperations({ args, query }) {
+      if (projects && "where" in args) args.where = { AND: [args.where ?? {}, scope] } as typeof args.where;
+      return query(args);
+    } } },
+  });
+  const projectSql = !projects ? Prisma.empty : projects.length
+    ? Prisma.sql`AND "hrmsProjectId" IN (${Prisma.join(projects)})`
+    : Prisma.sql`AND FALSE`;
   const monthParam = typeof req.query.month === "string" ? req.query.month : undefined;
   let monthRange: { gte: Date; lt: Date } | undefined;
   if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
@@ -525,21 +599,22 @@ router.get("/stats", async (req, res) => {
     clientImplCounts,
     newRequirementsTotal,
   ] = await Promise.all([
-    prisma.ticket.count({ where: withMonth({}) }),
-    prisma.ticket.count({ where: withMonth({ status: { in: [...openStatuses] } }) }),
-    prisma.ticket.count({ where: withMonth({ status: "UN_ASSIGNED" }) }),
-    prisma.ticket.count({ where: withMonth({ status: "OPEN_DONE" }) }),
-    prisma.ticket.count({ where: { createdAt: { gte: todayStart } } }),
-    prisma.ticket.count({ where: { status: "CLOSED", updatedAt: { gte: todayStart } } }),
-    prisma.ticket.findMany({
-      where:  { status: "OPEN_DONE" },
-      select: { createdAt: true, updatedAt: true },
+    scoped.ticket.count({ where: withMonth({}) }),
+    scoped.ticket.count({ where: withMonth({ status: { in: [...openStatuses] } }) }),
+    scoped.ticket.count({ where: withMonth({ status: "UN_ASSIGNED" }) }),
+    scoped.ticket.count({ where: withMonth({ aiResolved: true }) }),
+    scoped.ticket.count({ where: { createdAt: { gte: todayStart } } }),
+    scoped.ticket.count({ where: { status: "CLOSED", updatedAt: { gte: todayStart } } }),
+    scoped.ticket.findMany({
+      where:  { resolvedAt: { not: null } },
+      select: { createdAt: true, resolvedAt: true },
     }),
     monthRange
       ? prisma.$queryRaw<{ day: Date; count: number }[]>`
           SELECT DATE("createdAt") AS day, COUNT(*)::int AS count
           FROM tickets
           WHERE "createdAt" >= ${monthRange.gte} AND "createdAt" < ${monthRange.lt}
+          ${projectSql}
           GROUP BY DATE("createdAt")
           ORDER BY day ASC
         `
@@ -547,25 +622,26 @@ router.get("/stats", async (req, res) => {
           SELECT DATE("createdAt") AS day, COUNT(*)::int AS count
           FROM tickets
           WHERE "createdAt" >= ${thirtyDaysAgo}
+          ${projectSql}
           GROUP BY DATE("createdAt")
           ORDER BY day ASC
         `,
-    prisma.ticket.aggregate({
+    scoped.ticket.aggregate({
       where: { rating: { not: null } },
       _avg:  { rating: true },
       _count: { rating: true },
     }),
-    prisma.ticket.groupBy({
+    scoped.ticket.groupBy({
       by:    ["assignedToId"],
       where: { assignedToId: { not: null }, status: { in: [...openStatuses] } },
       _count: { _all: true },
     }),
-    prisma.ticket.groupBy({
+    scoped.ticket.groupBy({
       by:    ["assignedToId"],
       where: { assignedToId: { not: null }, status: "CLOSED", updatedAt: { gte: todayStart } },
       _count: { _all: true },
     }),
-    prisma.ticket.groupBy({
+    scoped.ticket.groupBy({
       by:    ["assignedToId"],
       where: { assignedToId: { not: null } },
       _count: { _all: true },
@@ -575,8 +651,9 @@ router.get("/stats", async (req, res) => {
       select:  { id: true, name: true, role: true },
       orderBy: { name: "asc" },
     }),
-    prisma.ticket.findMany({
+    scoped.ticket.findMany({
       orderBy: { updatedAt: "desc" },
+      where: {},
       take:    8,
       select: {
         ticketId:   true,
@@ -587,7 +664,7 @@ router.get("/stats", async (req, res) => {
         assignedTo: { select: { name: true } },
       },
     }),
-    prisma.ticket.findMany({
+    scoped.ticket.findMany({
       where:   { hrmsClientId: { not: null } },
       orderBy: { updatedAt: "desc" },
       take:    10,
@@ -600,29 +677,29 @@ router.get("/stats", async (req, res) => {
         hrmsClientName: true,
       },
     }),
-    prisma.ticket.groupBy({
+    scoped.ticket.groupBy({
       by: ["status"],
       where: withMonth({}),
       _count: { _all: true },
     }),
-    prisma.ticket.groupBy({
+    scoped.ticket.groupBy({
       by: ["priority"],
       where: withMonth({}),
       _count: { _all: true },
     }),
     // Per-client breakdown: total + new-requirement (IMPLEMENTATION) counts
-    prisma.ticket.groupBy({
+    scoped.ticket.groupBy({
       by:    ["hrmsClientId", "hrmsClientName"],
       where: withMonth({ hrmsClientId: { not: null } }),
       _count: { _all: true },
     }),
-    prisma.ticket.groupBy({
+    scoped.ticket.groupBy({
       by:    ["hrmsClientId", "hrmsClientName"],
       where: withMonth({ hrmsClientId: { not: null }, type: "IMPLEMENTATION" }),
       _count: { _all: true },
     }),
     // Top-level new-requirement count
-    prisma.ticket.count({ where: withMonth({ type: "IMPLEMENTATION" }) }),
+    scoped.ticket.count({ where: withMonth({ type: "IMPLEMENTATION" }) }),
   ]);
 
   // Build per-client breakdown: total + new-requirements per client
@@ -645,7 +722,7 @@ router.get("/stats", async (req, res) => {
     resolvedTickets.length > 0
       ? Math.round(
           resolvedTickets.reduce(
-            (sum, t) => sum + (t.updatedAt.getTime() - t.createdAt.getTime()),
+            (sum, t) => sum + (t.resolvedAt!.getTime() - t.createdAt.getTime()),
             0
           ) / resolvedTickets.length
         )
@@ -678,6 +755,7 @@ router.get("/stats", async (req, res) => {
   const closedTodayMap = new Map(closedTodayByAgent.map((r) => [r.assignedToId!, r._count._all]));
   const totalMap       = new Map(totalByAgent.map((r) => [r.assignedToId!, r._count._all]));
   const agentWorkload  = agents
+    .filter((agent) => !projects || totalMap.has(agent.id))
     .map((a) => ({
       id:           a.id,
       name:         a.name,
@@ -723,6 +801,21 @@ router.get("/stats", async (req, res) => {
   });
 });
 
+const ticketDetailsSchema = z.object({
+  title: z.string().trim().min(1).max(255),
+  description: z.string().trim().min(1).max(10000),
+});
+
+router.patch("/:id/details", async (req, res) => {
+  if (!canManageTicketOperations(req.user!)) { res.sendStatus(403); return; }
+  const parsed = ticketDetailsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Enter a valid ticket title and description." }); return;
+  }
+  await updateTicketMetadata(req.params.id, req.user!, parsed.data, ["title", "description"]);
+  res.sendStatus(204);
+});
+
 // PATCH /api/tickets/:id/assignee — assign or unassign a ticket
 router.patch("/:id/assignee", async (req: Request<{ id: string }>, res: Response) => {
   const parsed = assignTicketSchema.safeParse(req.body);
@@ -736,7 +829,7 @@ router.patch("/:id/assignee", async (req: Request<{ id: string }>, res: Response
   if (assignedToId !== null) {
     const user = await prisma.user.findUnique({
       where:  { id: assignedToId },
-      select: { isActive: true },
+      select: { isActive: true, role: true },
     });
     if (!user) {
       res.status(404).json({ error: "User not found" });
@@ -744,6 +837,10 @@ router.patch("/:id/assignee", async (req: Request<{ id: string }>, res: Response
     }
     if (!user.isActive) {
       res.status(400).json({ error: "Cannot assign ticket to an inactive user" });
+      return;
+    }
+    if (user.role !== ROLES.ADMIN && user.role !== ROLES.AGENT) {
+      res.status(400).json({ error: "Only staff accounts can be assigned tickets" });
       return;
     }
   }
@@ -757,11 +854,8 @@ router.patch("/:id/assignee", async (req: Request<{ id: string }>, res: Response
     return;
   }
 
-  const updated = await prisma.ticket.update({
-    where:  { ticketId: req.params.id },
-    data:   { assignedToId },
-    select: TICKET_SELECT,
-  });
+  await applyStaffTicketChange([req.params.id], req.user!, { field: "assignedToId", value: assignedToId });
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { ticketId: req.params.id }, select: TICKET_SELECT });
   const responseTicket = serializeHours(updated);
 
   // Notify Wisework (fire-and-forget — never blocks or throws)
@@ -803,17 +897,8 @@ router.patch("/:id/project", async (req: Request<{ id: string }>, res: Response)
     return;
   }
 
-  const updated = await prisma.ticket.update({
-    where: { ticketId: req.params.id },
-    data:  {
-      hrmsProjectId:   projectId   ?? null,
-      hrmsProjectName: projectName ?? null,
-      hrmsClientId:    clientId    ?? null,
-      hrmsClientName:  clientName  ?? null,
-      project:         projectName ?? "General",
-    },
-    select: TICKET_SELECT,
-  });
+  await updateTicketMetadata(req.params.id, req.user!, { hrmsProjectId: projectId ?? null, hrmsProjectName: projectName ?? null, hrmsClientId: clientId ?? null, hrmsClientName: clientName ?? null, project: projectName ?? "General" }, ["project","hrmsProjectId","hrmsClientId"]);
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { ticketId: req.params.id }, select: TICKET_SELECT });
 
   res.json(serializeHours(updated));
 });
@@ -828,19 +913,20 @@ router.patch("/:id/status", async (req: Request<{ id: string }>, res: Response) 
 
   const ticket = await prisma.ticket.findUnique({
     where:  { ticketId: req.params.id },
-    select: { id: true },
+    select: { id: true, status: true, type: true },
   });
   if (!ticket) {
     res.status(404).json({ error: "Ticket not found" });
     return;
   }
 
-  const updated = await prisma.ticket.update({
-    where:  { ticketId: req.params.id },
-    data:   { status: parsed.data.status },
-    select: TICKET_SELECT,
-  });
-
+  if (ticket.type === TICKET_TYPE.IMPLEMENTATION && !canManageTicketOperations(req.user!)) { res.status(403).json({ error: "Admin access required for implementation workflow" }); return; }
+  if (!canTransition(ticket.status, parsed.data.status, ticket.type)) { res.status(400).json({ error: "This status transition is not allowed. Use the request workflow actions." }); return; }
+  if (parsed.data.status === STATUS.OPEN_DONE && ticket.status !== STATUS.OPEN_DONE && !parsed.data.resolutionSummary) {
+    res.status(400).json({ error: "A resolution summary is required to resolve this ticket" }); return;
+  }
+  await applyStaffTicketChange([req.params.id], req.user!, { field: "status", value: parsed.data.status, resolutionSummary: parsed.data.resolutionSummary });
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id }, select: TICKET_SELECT });
   res.json(serializeHours(updated));
   void pushSyncToWisework(req.params.id, req.user!.name);
 });
@@ -855,18 +941,16 @@ router.patch("/:id/type", async (req: Request<{ id: string }>, res: Response) =>
 
   const ticket = await prisma.ticket.findUnique({
     where:  { ticketId: req.params.id },
-    select: { id: true },
+    select: { id: true, type: true },
   });
   if (!ticket) {
     res.status(404).json({ error: "Ticket not found" });
     return;
   }
 
-  const updated = await prisma.ticket.update({
-    where:  { ticketId: req.params.id },
-    data:   { type: parsed.data.type },
-    select: TICKET_SELECT,
-  });
+  if (ticket.type === TICKET_TYPE.IMPLEMENTATION || parsed.data.type === TICKET_TYPE.IMPLEMENTATION) { res.status(400).json({ error: "Implementation requests must use their dedicated workflow" }); return; }
+  await updateTicketMetadata(req.params.id, req.user!, { type: parsed.data.type }, ["type"]);
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { ticketId: req.params.id }, select: TICKET_SELECT });
 
   res.json(serializeHours(updated));
 });
@@ -888,11 +972,8 @@ router.patch("/:id/priority", async (req: Request<{ id: string }>, res: Response
     return;
   }
 
-  const updated = await prisma.ticket.update({
-    where:  { ticketId: req.params.id },
-    data:   { priority: parsed.data.priority },
-    select: TICKET_SELECT,
-  });
+  await applyStaffTicketChange([req.params.id], req.user!, { field: "priority", value: parsed.data.priority });
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { ticketId: req.params.id }, select: TICKET_SELECT });
 
   // Notify Wisework to update priority in existing notification (fire-and-forget)
   void notifyWiseworkPriorityUpdate(req.params.id, parsed.data.priority);
@@ -917,11 +998,8 @@ router.patch("/:id/estimated-hours", async (req: Request<{ id: string }>, res: R
     return;
   }
 
-  const updated = await prisma.ticket.update({
-    where:  { id: ticket.id },
-    data:   { estimatedHours: parsed.data.estimatedHours },
-    select: TICKET_SELECT,
-  });
+  await updateTicketMetadata(req.params.id, req.user!, { estimatedHours: parsed.data.estimatedHours }, ["estimatedHours"]);
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { ticketId: req.params.id }, select: TICKET_SELECT });
 
   res.json(serializeHours(updated));
 });
@@ -943,11 +1021,8 @@ router.patch("/:id/actual-hours", async (req: Request<{ id: string }>, res: Resp
     return;
   }
 
-  const updated = await prisma.ticket.update({
-    where:  { id: ticket.id },
-    data:   { actualHours: parsed.data.actualHours },
-    select: TICKET_SELECT,
-  });
+  await updateTicketMetadata(req.params.id, req.user!, { actualHours: parsed.data.actualHours }, ["actualHours"]);
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { ticketId: req.params.id }, select: TICKET_SELECT });
 
   res.json(serializeHours(updated));
 });
@@ -956,6 +1031,7 @@ router.patch("/:id/actual-hours", async (req: Request<{ id: string }>, res: Resp
 
 // POST /api/tickets/:id/implementation-plan — admin posts/updates the plan
 router.post("/:id/implementation-plan", async (req: Request<{ id: string }>, res: Response) => {
+  if (!canManageTicketOperations(req.user!)) { res.status(403).json({ error: "Admin access required" }); return; }
   const parsed = implementationPlanSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ fieldErrors: parsed.error.flatten().fieldErrors });
@@ -964,17 +1040,19 @@ router.post("/:id/implementation-plan", async (req: Request<{ id: string }>, res
 
   const ticket = await prisma.ticket.findUnique({
     where:  { ticketId: req.params.id },
-    select: { id: true, ticketId: true, type: true, title: true, senderEmail: true, senderName: true },
+    select: { id: true, ticketId: true, type: true, status: true, title: true, senderEmail: true, senderName: true },
   });
   if (!ticket)                                 { res.status(404).json({ error: "Ticket not found" }); return; }
   if (ticket.type !== TICKET_TYPE.IMPLEMENTATION) { res.status(400).json({ error: "Only implementation requests can have a plan" }); return; }
 
+  if (![STATUS.ADMIN_REVIEW, STATUS.PLANNING, STATUS.CUSTOMER_APPROVAL].includes(ticket.status as never)) { res.status(400).json({ error: "Start review before posting a plan" }); return; }
   const updated = await prisma.$transaction(async (tx) => {
     const now = new Date();
     await tx.implementationRequest.update({
       where: { ticketId: ticket.id },
-      data:  { planContent: parsed.data.planContent, planPostedAt: now },
+      data:  { planContent: parsed.data.planContent, planPostedAt: now, customerApprovedAt: null, customerRejectedAt: null, customerRejectionReason: null },
     });
+    await tx.ticketHistory.create({ data: { ticketId: ticket.id, changedById: req.user!.id, field: "status", oldValue: ticket.status, newValue: STATUS.CUSTOMER_APPROVAL } });
     return tx.ticket.update({
       where:  { id: ticket.id },
       data:   { status: STATUS.CUSTOMER_APPROVAL },
@@ -996,6 +1074,7 @@ router.post("/:id/implementation-plan", async (req: Request<{ id: string }>, res
 
 // POST /api/tickets/:id/start-review — admin moves SUBMITTED → ADMIN_REVIEW
 router.post("/:id/start-review", async (req: Request<{ id: string }>, res: Response) => {
+  if (!canManageTicketOperations(req.user!)) { res.status(403).json({ error: "Admin access required" }); return; }
   const ticket = await prisma.ticket.findUnique({
     where:  { ticketId: req.params.id },
     select: { id: true, type: true, status: true },
@@ -1004,16 +1083,14 @@ router.post("/:id/start-review", async (req: Request<{ id: string }>, res: Respo
   if (ticket.type !== TICKET_TYPE.IMPLEMENTATION) { res.status(400).json({ error: "Only implementation requests can be reviewed" }); return; }
   if (ticket.status !== STATUS.SUBMITTED)         { res.status(400).json({ error: "Only SUBMITTED tickets can start review" }); return; }
 
-  const updated = await prisma.ticket.update({
-    where:  { id: ticket.id },
-    data:   { status: STATUS.ADMIN_REVIEW },
-    select: TICKET_SELECT,
-  });
+  await changeTicketStatus(ticket.id, STATUS.ADMIN_REVIEW, req.user!.id);
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id }, select: TICKET_SELECT });
   res.json(serializeHours(updated));
 });
 
 // POST /api/tickets/:id/request-more-info — admin sends ticket back to SUBMITTED with a comment
 router.post("/:id/request-more-info", async (req: Request<{ id: string }>, res: Response) => {
+  if (!canManageTicketOperations(req.user!)) { res.status(403).json({ error: "Admin access required" }); return; }
   const parsed = requestMoreInfoSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ fieldErrors: parsed.error.flatten().fieldErrors });
@@ -1061,6 +1138,7 @@ router.post("/:id/request-more-info", async (req: Request<{ id: string }>, res: 
 
 // POST /api/tickets/:id/start-implementation — admin moves APPROVED → OPEN_IN_PROGRESS
 router.post("/:id/start-implementation", async (req: Request<{ id: string }>, res: Response) => {
+  if (!canManageTicketOperations(req.user!)) { res.status(403).json({ error: "Admin access required" }); return; }
   const ticket = await prisma.ticket.findUnique({
     where:  { ticketId: req.params.id },
     select: { id: true, type: true, status: true },
@@ -1069,18 +1147,15 @@ router.post("/:id/start-implementation", async (req: Request<{ id: string }>, re
   if (ticket.type !== TICKET_TYPE.IMPLEMENTATION) { res.status(400).json({ error: "Only implementation requests support this action" }); return; }
   if (ticket.status !== STATUS.APPROVED)          { res.status(400).json({ error: "Only APPROVED tickets can start implementation" }); return; }
 
-  const updated = await prisma.ticket.update({
-    where:  { id: ticket.id },
-    data:   { status: STATUS.OPEN_IN_PROGRESS },
-    select: TICKET_SELECT,
-  });
+  await changeTicketStatus(ticket.id, STATUS.OPEN_IN_PROGRESS, req.user!.id);
+  const updated = await prisma.ticket.findUniqueOrThrow({ where: { id: ticket.id }, select: TICKET_SELECT });
   res.json(serializeHours(updated));
 });
 
 // GET /api/tickets/:id/comments — list all comments for a ticket
 router.get("/:id/comments", async (req: Request<{ id: string }>, res: Response) => {
   const ticket = await prisma.ticket.findUnique({
-    where:  { ticketId: req.params.id },
+    where:  { ticketId: req.params.id, ...supportTicketScope(req.user!.supportAccess) },
     select: { id: true },
   });
   if (!ticket) {
@@ -1094,6 +1169,7 @@ router.get("/:id/comments", async (req: Request<{ id: string }>, res: Response) 
       id:          true,
       content:     true,
       senderType:  true,
+      isInternal: true,
       author:      { select: { id: true, name: true } },
       createdAt:   true,
       attachments: { select: { id: true, filename: true, mimetype: true, size: true, filepath: true } },
@@ -1221,7 +1297,7 @@ router.post("/:id/comments", async (req: Request<{ id: string }>, res: Response)
     return;
   }
 
-  const parsed = createCommentSchema.safeParse(req.body);
+  const parsed = staffCommentSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ fieldErrors: parsed.error.flatten().fieldErrors });
     return;
@@ -1229,7 +1305,7 @@ router.post("/:id/comments", async (req: Request<{ id: string }>, res: Response)
 
   const ticket = await prisma.ticket.findUnique({
     where:  { ticketId: req.params.id },
-    select: { id: true, title: true, senderEmail: true, hrmsClientName: true },
+    select: { id: true, title: true, senderEmail: true, hrmsClientName: true, firstResponseAt: true },
   });
   if (!ticket) {
     res.status(404).json({ error: "Ticket not found" });
@@ -1239,41 +1315,29 @@ router.post("/:id/comments", async (req: Request<{ id: string }>, res: Response)
   const isAgentOrAdmin = req.user!.role === ROLES.ADMIN || req.user!.role === ROLES.AGENT;
   const senderType = isAgentOrAdmin ? COMMENT_SENDER_TYPES[0] : COMMENT_SENDER_TYPES[1];
 
-  const [comment] = await Promise.all([
-    prisma.comment.create({
-      data: {
-        content:    parsed.data.content,
-        senderType,
-        ticketId:   ticket.id,
-        authorId:   req.user!.id,
-      },
-      select: {
-        id:          true,
-        content:     true,
-        senderType:  true,
-        author:      { select: { id: true, name: true } },
-        createdAt:   true,
-        attachments: { select: { id: true, filename: true, mimetype: true, size: true, filepath: true } },
-      },
-    }),
-    prisma.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } }),
-  ]);
-
-  // Save comment attachments
-  const uploadedFiles = req.files as Express.Multer.File[] | undefined;
-  if (uploadedFiles && uploadedFiles.length > 0) {
-    await prisma.attachment.createMany({
-      data: uploadedFiles.map((f) => ({
-        id:        randomUUID(),
-        filename:  sanitizeFilename(f.originalname), // H7 — prevent stored XSS via filename
-        filepath:  f.path,
-        mimetype:  f.mimetype,
-        size:      f.size,
-        ticketId:  ticket.id,
-        commentId: comment.id,
-      })),
-    });
+  const isInternal = parsed.data.isInternal;
+  if (req.user!.supportAccess && !isInternal && req.user!.supportAccess.support_role !== "TSA") {
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    await Promise.all(files.map((file) => unlink(file.path).catch(() => undefined)));
+    res.sendStatus(403); return;
   }
+  const uploadedFiles = (req.files as Express.Multer.File[] | undefined) ?? [];
+  const comment = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ticket.id}))`;
+    const current = await tx.ticket.findUniqueOrThrow({ where: { id: ticket.id } });
+    const access = req.user!.supportAccess;
+    if (access ? !permitsSupportAction(access, current.hrmsProjectId, isInternal ? "note" : "reply")
+      : !canEditStaffTicket(req.user!, current)) throw new WorkError(403, "You cannot respond to this ticket");
+    const result = await tx.comment.create({ data: {
+      content: parsed.data.content, isInternal, senderType, ticketId: ticket.id, authorId: req.user!.id,
+      attachments: { create: uploadedFiles.map((f) => ({ id: randomUUID(), filename: sanitizeFilename(f.originalname), filepath: f.path, mimetype: f.mimetype, size: f.size, ticketId: ticket.id })) },
+    }, select: {
+      id: true, content: true, senderType: true, isInternal: true, author: { select: { id: true, name: true } }, createdAt: true,
+      attachments: { select: { id: true, filename: true, mimetype: true, size: true, filepath: true } },
+    } });
+    await tx.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date(), ...(!current.firstResponseAt && !isInternal ? { firstResponseAt: new Date() } : {}) } });
+    return result;
+  });
 
   // Transform filepath → public URL and respond
   const response = {
@@ -1287,12 +1351,10 @@ router.post("/:id/comments", async (req: Request<{ id: string }>, res: Response)
     })),
   };
   res.status(201).json(response);
-  void pushSyncToWisework(req.params.id, req.user!.name);
+  if (!isInternal) void pushSyncToWisework(req.params.id, req.user!.name);
 
-  // Only email for tickets that originated via email webhook (hrmsClientName is null).
-  // Portal tickets always set hrmsClientName; webhook tickets never do.
-  // Portal customers can log in to see replies, so no email is needed there.
-  if (isAgentOrAdmin && ticket.senderEmail && !ticket.hrmsClientName) {
+  // Public replies may notify the requester; internal notes never leave the staff workspace.
+  if (!isInternal && isAgentOrAdmin && ticket.senderEmail) {
     sendReplyEmail({
       to:             ticket.senderEmail,
       ticketId:       req.params.id,
@@ -1493,7 +1555,7 @@ router.post("/:id/summarize", polishLimiter, async (req: Request<{ id: string }>
 // GET /api/tickets/:id — fetch a single ticket by ticketId (e.g. TKT-0001)
 router.get("/:id", async (req: Request<{ id: string }>, res: Response) => {
   const ticket = await prisma.ticket.findUnique({
-    where:  { ticketId: req.params.id },
+    where:  { ticketId: req.params.id, ...supportTicketScope(req.user!.supportAccess) },
     select: TICKET_SELECT,
   });
 
@@ -1504,6 +1566,12 @@ router.get("/:id", async (req: Request<{ id: string }>, res: Response) => {
 
   res.json({
     ...serializeHours(ticket),
+    ...(req.user!.supportAccess && { supportPermissions: {
+      manage: canManageTicketOperations(req.user!),
+      assign: permitsSupportAction(req.user!.supportAccess, ticket.hrmsProjectId, "assign"),
+      reply: permitsSupportAction(req.user!.supportAccess, ticket.hrmsProjectId, "reply"),
+      note: permitsSupportAction(req.user!.supportAccess, ticket.hrmsProjectId, "note"),
+    } }),
     attachments: ticket.attachments.map((a) => ({
       id:        a.id,
       filename:  a.filename,

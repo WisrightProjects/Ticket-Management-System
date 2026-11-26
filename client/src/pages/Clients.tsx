@@ -1,260 +1,153 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Building2, Copy, Check, ExternalLink, Tickets } from "lucide-react";
+import { Building2, ChevronRight, Plus } from "lucide-react";
+import { ListPagination } from "@/components/ListPagination";
+import { SharedClientLogin } from "@/components/SharedClientLogin";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { readableOrganizationName, workError } from "@/lib/work-client";
 
-const API_URL = import.meta.env.VITE_API_URL || "";
-
-interface Client {
-  id:   string;
-  name: string;
-}
-
-/** Matches the server-side slugifyName in lib/hrms.ts */
-function slugifyName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <button
-      onClick={handleCopy}
-      title="Copy URL"
-      className="flex items-center justify-center w-7 h-7 rounded-md transition-colors"
-      style={{
-        color:      copied ? "var(--rt-accent)" : "var(--rt-text-3)",
-        background: "transparent",
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--rt-accent-bg)"; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-    >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-    </button>
-  );
-}
-
-const PAGE_SIZE = 10;
+type Workspace = { id: string; name: string; hrmsClientId?: string | null; isActive?: boolean };
+type Client = { id: string; name: string };
+type ClientRow = { id: string; name: string; status: "Ready" | "Not set up" | "Needs review"; workspace?: Workspace; clientId?: string };
 
 export default function Clients() {
+  const navigate = useNavigate();
+  const cache = useQueryClient();
   const [search, setSearch] = useState("");
-  const [page, setPage]     = useState(1);
-
-  const { data: clients = [], isLoading, isError } = useQuery<Client[]>({
+  const [status, setStatus] = useState("");
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  const [addOpen, setAddOpen] = useState(false);
+  const [companyName, setCompanyName] = useState("");
+  const directory = useQuery({
     queryKey: ["clients"],
-    queryFn:  async () => {
-      const res = await axios.get(`${API_URL}/api/tickets/clients`, { withCredentials: true });
-      return res.data as Client[];
+    queryFn: async () => {
+      const res = await axios.get<Client[]>("/api/tickets/clients", { withCredentials: true });
+      return { clients: res.data, source: res.headers?.["x-client-directory-source"] as string | undefined };
     },
   });
-
-  const filtered = clients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paginated  = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
-  // Reset to page 1 when search changes
-  const handleSearch = (value: string) => {
-    setSearch(value);
-    setPage(1);
+  const workspaces = useQuery({
+    queryKey: ["organizations"],
+    queryFn: async () => (await axios.get<Workspace[]>("/api/organizations", { withCredentials: true })).data,
+  });
+  const openWorkspace = async (id: string) => {
+    await cache.invalidateQueries({ queryKey: ["organizations"] });
+    navigate(`/clients/${encodeURIComponent(id)}`);
   };
+  const setup = useMutation({
+    mutationFn: async (clientId: string) => (await axios.post<{ id: string }>("/api/organizations/client-setup", { clientId }, { withCredentials: true })).data,
+    onSuccess: ({ id }) => openWorkspace(id),
+  });
+  const add = useMutation({
+    mutationFn: async (name: string) => {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 100).replace(/-$/, "") || `client-${crypto.randomUUID()}`;
+      return (await axios.post<{ id: string }>("/api/organizations", { name, slug }, { withCredentials: true })).data;
+    },
+    onSuccess: ({ id }) => openWorkspace(id),
+  });
+  const reviewId = axios.isAxiosError(setup.error) && typeof setup.error.response?.data?.organizationId === "string"
+    ? setup.error.response.data.organizationId : undefined;
 
-  const baseUrl = window.location.origin;
+  const companies = directory.data?.source === "ticket-history" || !Array.isArray(directory.data?.clients) ? [] : directory.data.clients;
+  const saved = Array.isArray(workspaces.data) ? workspaces.data : [];
+  const byClient = new Map(saved.filter((item) => item.hrmsClientId).map((item) => [item.hrmsClientId, item]));
+  const knownIds = new Set(companies.map(({ id }) => id));
+  const rows: ClientRow[] = [
+    ...companies.map(({ id, name }): ClientRow => {
+      const workspace = byClient.get(id);
+      return { id: `wisework:${id}`, name, clientId: id, workspace, status: workspace ? workspace.isActive === false ? "Needs review" : "Ready" : "Not set up" };
+    }),
+    ...saved.filter(({ hrmsClientId }) => !hrmsClientId || !knownIds.has(hrmsClientId)).map((workspace): ClientRow => ({
+      id: workspace.id,
+      name: readableOrganizationName(workspace.name) ?? "Unnamed company",
+      workspace,
+      status: workspace.hrmsClientId || workspace.isActive === false ? "Needs review" : "Ready",
+    })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+  const filtered = rows.filter((row) => (!status || row.status === status) && row.name.toLowerCase().includes(search.trim().toLowerCase()));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const first = (currentPage - 1) * pageSize;
+  const visible = filtered.slice(first, first + pageSize);
+  const loading = directory.isPending || workspaces.isPending;
 
   return (
-    <div className="px-4 sm:px-6 py-6 sm:py-8">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-7">
-        <div>
-          <h1
-            className="text-2xl sm:text-3xl font-bold tracking-tight"
-            style={{ color: "var(--rt-text-1)" }}
-          >
-            Clients
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--rt-text-3)" }}>
-            All active clients from Wisework — share the portal URL with each client
-          </p>
+    <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 sm:py-8">
+      <PageHeader title="Clients" subtitle="Set up customer portals and manage who can sign in."
+        actions={<Button onClick={() => { add.reset(); setCompanyName(""); setAddOpen(true); }}><Plus aria-hidden="true" />Add client</Button>} />
+      {workspaces.isError && <ErrorBanner message="Could not load client workspaces. Refresh to try again." />}
+      {(directory.isError || directory.data?.source === "ticket-history") && <p role="status" className="mb-4 text-sm text-muted-foreground">The WiseWork directory is unavailable. Existing client workspaces are still listed.</p>}
+      {directory.data?.source === "local-snapshot" && <p className="mb-4 text-xs text-muted-foreground">WiseWork companies are listed from the local snapshot.</p>}
+      {setup.isError && <div role="alert" className="mb-4 rounded-lg border border-destructive/25 p-3 text-sm text-destructive">
+        {workError(setup.error)} {reviewId && <Link className="font-semibold underline" to={`/clients/${encodeURIComponent(reviewId)}`}>Open existing workspace</Link>}
+      </div>}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Input aria-label="Search clients" className="w-full sm:w-64" placeholder="Search clients…" value={search}
+            onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+          <select aria-label="Portal status" className="h-8 rounded-lg border border-input bg-card px-2 text-sm" value={status}
+            onChange={(event) => { setStatus(event.target.value); setPage(1); }}>
+            <option value="">All portal statuses</option>
+            {["Ready", "Not set up", "Needs review"].map((value) => <option key={value}>{value}</option>)}
+          </select>
         </div>
-
-        {!isLoading && !isError && (
-          <Badge variant="secondary" className="text-sm px-3 py-1 mt-1">
-            {clients.length} {clients.length === 1 ? "client" : "clients"}
-          </Badge>
-        )}
+        <SharedClientLogin />
       </div>
 
-      {/* Search */}
-      <div className="mb-4 max-w-sm">
-        <Input
-          placeholder="Search clients…"
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
-          style={{ background: "var(--rt-surface)" }}
-        />
-      </div>
-
-      {/* Table */}
-      <div className="border rounded-lg overflow-hidden bg-card">
-        <div className="overflow-x-auto">
-          <Table className="min-w-[600px]">
-            <TableHeader style={{ background: "var(--rt-surface-2)" }}>
-              <TableRow>
-                <TableHead className="font-bold text-xs uppercase tracking-wide" style={{ color: "var(--rt-text-1)" }}>
-                  Client Name
-                </TableHead>
-                <TableHead className="font-bold text-xs uppercase tracking-wide" style={{ color: "var(--rt-text-1)" }}>
-                  Customer Portal URL
-                </TableHead>
-                <TableHead className="font-bold text-xs uppercase tracking-wide text-right" style={{ color: "var(--rt-text-1)" }}>
-                  Actions
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-64" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : isError ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-destructive text-sm">
-                    Failed to load clients. Make sure Wisework is running.
-                  </TableCell>
-                </TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-sm">
-                    {search ? `No clients matching "${search}"` : "No clients found."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginated.map((client) => {
-                  const slug    = slugifyName(client.name);
-                  const portalUrl = `${baseUrl}/portal/${slug}`;
-
-                  return (
-                    <TableRow key={client.id}>
-                      {/* Name */}
-                      <TableCell>
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                            style={{ background: "var(--rt-accent-bg)" }}
-                          >
-                            <Building2 className="h-4 w-4" style={{ color: "var(--rt-accent)" }} />
-                          </div>
-                          <span className="font-medium text-sm" style={{ color: "var(--rt-text-1)" }}>
-                            {client.name}
-                          </span>
-                        </div>
-                      </TableCell>
-
-                      {/* Portal URL */}
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <code
-                            className="text-xs px-2 py-1 rounded font-mono break-all"
-                            style={{
-                              background: "var(--rt-accent-bg)",
-                              color:      "var(--rt-accent)",
-                            }}
-                          >
-                            /portal/{slug}
-                          </code>
-                          <CopyButton text={portalUrl} />
-                          <a
-                            href={portalUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Open portal"
-                            className="flex items-center justify-center w-7 h-7 rounded-md transition-colors"
-                            style={{ color: "var(--rt-text-3)" }}
-                            onMouseEnter={(e) => {
-                              (e.currentTarget as HTMLElement).style.background = "var(--rt-accent-bg)";
-                              (e.currentTarget as HTMLElement).style.color      = "var(--rt-accent)";
-                            }}
-                            onMouseLeave={(e) => {
-                              (e.currentTarget as HTMLElement).style.background = "transparent";
-                              (e.currentTarget as HTMLElement).style.color      = "var(--rt-text-3)";
-                            }}
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        </div>
-                      </TableCell>
-
-                      {/* Actions */}
-                      <TableCell className="text-right">
-                        <Link
-                          to={`/tickets?clientId=${client.id}`}
-                          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
-                          style={{
-                            color:      "var(--rt-accent)",
-                            background: "var(--rt-accent-bg)",
-                          }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.8"; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-                        >
-                          <Tickets className="h-3.5 w-3.5" />
-                          View Tickets
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* Pagination */}
-      {!isLoading && !isError && filtered.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-xs text-muted-foreground">
-            {filtered.length} clients · page {currentPage} of {totalPages}
-          </span>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-              Previous
-            </Button>
-            <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-              Next
-            </Button>
+      {loading ? <div aria-label="Loading clients" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3].map((item) => <Skeleton key={item} className="h-24 rounded-xl" />)}
+      </div> : !visible.length ? <EmptyState icon={Building2} title={search || status ? "No clients match these filters." : "No clients found."} />
+        : <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visible.map((row) => (
+              <article key={row.id} data-testid="client-card" className="flex min-w-0 flex-col justify-between gap-4 rounded-xl border bg-card p-4">
+                <div className="flex items-start gap-2.5">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Building2 className="size-4" aria-hidden="true" /></span>
+                  <div className="min-w-0">
+                    <h2 className="break-words text-sm font-semibold">{row.name}</h2>
+                    <Badge variant={row.status === "Ready" ? "secondary" : "outline"} className="mt-1">{row.status}</Badge>
+                  </div>
+                </div>
+                {row.workspace ? <Button size="sm" variant="outline" className="self-start" render={<Link to={`/clients/${encodeURIComponent(row.workspace.id)}`} />}>
+                  Manage client <ChevronRight aria-hidden="true" />
+                </Button> : <Button size="sm" className="self-start" disabled={setup.isPending || workspaces.isError}
+                    onClick={() => { if (row.clientId) setup.mutate(row.clientId); }}>
+                  {setup.isPending && setup.variables === row.clientId ? "Setting up…" : "Set up portal"}
+                </Button>}
+              </article>
+            ))}
           </div>
-        </div>
-      )}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground">{first + 1}–{first + visible.length} of {filtered.length} clients</span>
+            <ListPagination page={currentPage} totalPages={totalPages} onPageChange={setPage}
+              pageSize={pageSize} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
+          </div>
+        </>}
+
+      <Dialog open={addOpen} onOpenChange={(open) => { if (!add.isPending) setAddOpen(open); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add client</DialogTitle>
+            <DialogDescription>Use this for a company without a WiseWork record. For a WiseWork company, find it in Clients and select Set up portal.</DialogDescription>
+          </DialogHeader>
+          <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); add.mutate(companyName.trim()); }}>
+            <Label htmlFor="new-client-name">Company name</Label>
+            <Input id="new-client-name" required minLength={2} maxLength={150} value={companyName} onChange={(event) => setCompanyName(event.target.value)} />
+            {add.isError && <p role="alert" className="text-sm text-destructive">{workError(add.error)}</p>}
+            <Button type="submit" disabled={add.isPending || companyName.trim().length < 2}>{add.isPending ? "Creating…" : "Create client"}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

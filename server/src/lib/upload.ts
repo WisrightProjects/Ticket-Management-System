@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { mkdirSync } from "node:fs";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
+import type { Request, Response } from "express";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOADS_DIR = path.resolve(__dirname, "../../uploads");
@@ -53,13 +54,14 @@ const MAGIC_SIGNATURES: { signature: number[]; mimeType: string }[] = [
  * not start with a recognised signature, or for WEBP files whose RIFF chunk
  * sub-type identifier (bytes 8-11) is not "WEBP".
  */
-export async function validateMagicBytes(filepath: string): Promise<boolean> {
+export async function validateMagicBytes(filepath: string, expectedMime?: string): Promise<boolean> {
   const fd = await fs.promises.open(filepath, "r");
   try {
     const buffer = Buffer.alloc(12);
     await fd.read(buffer, 0, 12, 0);
     for (const { signature, mimeType } of MAGIC_SIGNATURES) {
       if (signature.every((byte, i) => buffer[i] === byte)) {
+        if (expectedMime && (expectedMime === "image/jpg" ? "image/jpeg" : expectedMime) !== mimeType) return false;
         // WEBP uses a generic RIFF container — confirm the sub-type is WEBP
         if (mimeType === "image/webp") {
           return buffer.slice(8, 12).toString("ascii") === "WEBP";
@@ -86,3 +88,14 @@ export const uploadArray = multer({
     }
   },
 }).array("attachments", 5);
+
+export async function runImageUpload(req: Request, res: Response): Promise<void> {
+  const removeFiles = async () => Promise.all(((req.files as Express.Multer.File[] | undefined) ?? []).map((f) => fs.promises.unlink(f.path).catch(() => undefined)));
+  try {
+    await new Promise<void>((resolve, reject) => uploadArray(req, res, (err: unknown) => err ? reject(err) : resolve()));
+    for (const file of (req.files as Express.Multer.File[] | undefined) ?? []) {
+      if (!await validateMagicBytes(file.path, file.mimetype)) throw new Error("Image content does not match its file type");
+    }
+    res.once("finish", () => { if (res.statusCode >= 400) void removeFiles(); });
+  } catch (err) { await removeFiles(); throw err; }
+}

@@ -2,6 +2,7 @@ import { execSync } from "child_process";
 import path from "path";
 import pg from "pg";
 import dotenv from "dotenv";
+import { assertDatabaseTarget } from "../server/src/lib/database-safety";
 
 dotenv.config({ path: path.resolve(__dirname, "../server/.env") });
 
@@ -27,6 +28,8 @@ function resolveBun(): string {
 const BUN = resolveBun();
 
 async function globalSetup() {
+  assertDatabaseTarget(testDbUrl);
+  if (new URL(testDbUrl).pathname !== "/ticket_management_test") throw new Error("Test setup may reset only ticket_management_test");
   console.log("Setting up test database...");
 
   // Ensure the test database exists (create it if missing)

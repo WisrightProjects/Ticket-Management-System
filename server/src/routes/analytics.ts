@@ -1,3 +1,4 @@
+import { canManageTicketOperations } from "../lib/support-access.js";
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
@@ -18,7 +19,8 @@ router.use((req, res, next) => {
 });
 
 // GET /api/analytics/overview
-router.get("/overview", async (_req, res) => {
+router.get("/overview", async (req, res) => {
+  if (!canManageTicketOperations(req.user!)) { res.sendStatus(403); return; }
   const [
     total,
     byStatus,
@@ -99,15 +101,15 @@ router.get("/overview", async (_req, res) => {
 
   // Avg resolution time and by-priority breakdown (CLOSED tickets)
   const closedTickets = await prisma.ticket.findMany({
-    where:  { status: "CLOSED" },
-    select: { createdAt: true, updatedAt: true, priority: true },
+    where:  { status: "CLOSED", resolvedAt: { not: null } },
+    select: { createdAt: true, resolvedAt: true, priority: true },
   });
 
   const avgResolutionHours =
     closedTickets.length > 0
       ? closedTickets.reduce(
           (sum, t) =>
-            sum + (new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime()),
+            sum + ((t.resolvedAt ? new Date(t.resolvedAt).getTime() - new Date(t.createdAt).getTime() : 0)),
           0
         ) /
         closedTickets.length /
@@ -119,7 +121,7 @@ router.get("/overview", async (_req, res) => {
   for (const t of closedTickets) {
     const entry = priorityResMap.get(t.priority) ?? { sum: 0, count: 0 };
     entry.sum +=
-      new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime();
+      (t.resolvedAt ? new Date(t.resolvedAt).getTime() - new Date(t.createdAt).getTime() : 0);
     entry.count += 1;
     priorityResMap.set(t.priority, entry);
   }

@@ -5,13 +5,15 @@ import type { ApiTicket } from "@tms/core";
 import { CATEGORY_LABELS, PRIORITY_LABELS, STATUS_LABELS } from "@/lib/ticket-badges";
 import { STATUS_CONFIG } from "@/lib/status-config";
 import { Button } from "@/components/ui/button";
+import { ticketDetailPath } from "@/lib/ticket-navigation";
 
 interface TicketSlidePanelProps {
   ticket: ApiTicket | null;
   onClose: () => void;
+  returnTo?: string;
 }
 
-export function TicketSlidePanel({ ticket, onClose }: TicketSlidePanelProps) {
+export function TicketSlidePanel({ ticket, onClose, returnTo }: TicketSlidePanelProps) {
   // Close on Escape key
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -61,16 +63,8 @@ export function TicketSlidePanel({ ticket, onClose }: TicketSlidePanelProps) {
         {ticket && (
           <>
             {/* Header */}
-            <div
-              style={{
-                padding:       "16px 20px",
-                borderBottom:  "1px solid var(--rt-border)",
-                display:       "flex",
-                flexDirection: "column",
-                gap:           "8px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div className="flex flex-col gap-2 px-5 py-4 border-b border-[var(--rt-border)]">
+              <div className="flex items-center justify-between">
                 <span
                   className="font-mono text-xs font-semibold"
                   style={{ color: "var(--rt-accent)" }}
@@ -79,20 +73,7 @@ export function TicketSlidePanel({ ticket, onClose }: TicketSlidePanelProps) {
                 </span>
                 <button
                   onClick={onClose}
-                  style={{
-                    display:         "flex",
-                    alignItems:      "center",
-                    justifyContent:  "center",
-                    width:           "28px",
-                    height:          "28px",
-                    borderRadius:    "6px",
-                    background:      "transparent",
-                    border:          "none",
-                    cursor:          "pointer",
-                    color:           "var(--rt-text-3)",
-                  }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--rt-surface-2)")}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+                  className="flex items-center justify-center w-7 h-7 rounded-md bg-transparent border-none cursor-pointer text-[var(--rt-text-3)] hover:bg-[var(--rt-surface-2)] transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -119,15 +100,7 @@ export function TicketSlidePanel({ ticket, onClose }: TicketSlidePanelProps) {
             </div>
 
             {/* Metadata */}
-            <div
-              style={{
-                padding: "16px 20px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "14px",
-                flex: 1,
-              }}
-            >
+            <div className="flex flex-col gap-3.5 flex-1 px-5 py-4">
               <MetaRow label="Type"     value={CATEGORY_LABELS[ticket.type]} />
               <MetaRow label="Priority" value={PRIORITY_LABELS[ticket.priority]} />
               <MetaRow label="Project"  value={ticket.hrmsProjectName ?? ticket.project ?? "—"} />
@@ -142,7 +115,7 @@ export function TicketSlidePanel({ ticket, onClose }: TicketSlidePanelProps) {
 
               {/* Description */}
               {ticket.description && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div className="flex flex-col gap-1.5">
                   <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--rt-text-3)" }}>
                     Description
                   </span>
@@ -166,14 +139,8 @@ export function TicketSlidePanel({ ticket, onClose }: TicketSlidePanelProps) {
             </div>
 
             {/* Footer */}
-            <div
-              style={{
-                padding:    "16px 20px",
-                borderTop:  "1px solid var(--rt-border)",
-                flexShrink: 0,
-              }}
-            >
-              <Link to={`/tickets/${ticket.ticketId}`} style={{ textDecoration: "none" }}>
+            <div className="px-5 py-4 border-t border-[var(--rt-border)] flex-shrink-0">
+              <Link to={ticketDetailPath(ticket.ticketId, returnTo)} className="no-underline">
                 <Button className="w-full gap-2" size="sm">
                   <ExternalLink className="h-3.5 w-3.5" />
                   Open Full Ticket
@@ -189,10 +156,10 @@ export function TicketSlidePanel({ ticket, onClose }: TicketSlidePanelProps) {
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+    <div className="flex items-baseline gap-2">
       <span
-        className="text-xs font-semibold uppercase tracking-widest flex-shrink-0"
-        style={{ color: "var(--rt-text-3)", width: "68px" }}
+        className="text-xs font-semibold uppercase tracking-widest flex-shrink-0 w-[68px]"
+        style={{ color: "var(--rt-text-3)" }}
       >
         {label}
       </span>

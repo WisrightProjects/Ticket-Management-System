@@ -2,10 +2,16 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { ROLES } from "@tms/core";
 import prisma from "./prisma.js";
+import { wiseWorkSso } from "./wisework-sso.js";
 
 const isProd = process.env.NODE_ENV === "production";
 
 export const auth = betterAuth({
+  disabledPaths: ["/unlink-account", "/oauth2/link", "/get-access-token", "/refresh-token", "/account-info"],
+  plugins: wiseWorkSso ? [wiseWorkSso] : [],
+  ...(wiseWorkSso && {
+    account: { storeStateStrategy: "database", accountLinking: { enabled: false }, updateAccountOnSignIn: false },
+  }),
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
@@ -32,6 +38,9 @@ export const auth = betterAuth({
     enabled: process.env.NODE_ENV !== "test",  // enforce in dev too — disabled only in test
     window: 60,       // 1 minute window
     max: 10,          // max 10 attempts per window
+    customRules: {
+      "/get-session": { window: 60, max: 120 },
+    },
     storage: "memory",
   },
   advanced: {

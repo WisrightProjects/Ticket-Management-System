@@ -76,14 +76,14 @@ export function ImageUploadField({ files, onChange }: ImageUploadFieldProps) {
           onClick={() => inputRef.current?.click()}
           className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors ${
             dragging
-              ? "border-orange-400 bg-orange-50"
-              : "border-gray-300 hover:border-orange-400 hover:bg-orange-50/50"
+              ? "border-[var(--rt-accent)] bg-[var(--rt-accent-bg)]"
+              : "border-gray-300 hover:border-[var(--rt-accent)] hover:bg-[var(--rt-accent-bg)]"
           }`}
         >
           <Upload className="w-5 h-5 text-gray-400" />
           <p className="text-sm text-gray-500">
             Drop images here or{" "}
-            <span className="text-orange-500 font-medium">browse</span>
+            <span className="text-[var(--rt-accent)] font-medium">browse</span>
           </p>
           <p className="text-xs text-gray-400">JPEG, PNG, GIF, WEBP</p>
           <input
@@ -130,7 +130,7 @@ export function ImageUploadField({ files, onChange }: ImageUploadFieldProps) {
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center hover:border-orange-400 transition-colors"
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center hover:border-[var(--rt-accent)] transition-colors"
             >
               <ImageIcon className="w-5 h-5 text-gray-400" />
             </button>

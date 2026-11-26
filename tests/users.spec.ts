@@ -41,9 +41,9 @@ async function goToUsersPage(page: Page) {
   ).toBeVisible();
 }
 
-/** Find the table row for a user by their email. */
+/** Find the user card for a user by their email. */
 function userRow(page: Page, email: string) {
-  return page.getByRole("row").filter({ hasText: email });
+  return page.getByTestId("user-card").filter({ hasText: email });
 }
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ test.describe("User management — happy paths", () => {
   test("displays the user list with the seeded admin account", async ({
     page,
   }) => {
-    await expect(page.getByRole("table")).toBeVisible();
+    await expect(page.getByTestId("user-card").first()).toBeVisible();
     await expect(page.getByText(ADMIN_EMAIL)).toBeVisible();
   });
 
@@ -183,8 +183,8 @@ test.describe("Agent performance detail page (/users/:id)", () => {
   });
 
   test("clicking a user name navigates to their detail page", async ({ page }) => {
-    // User name links live inside the table — find the first one
-    const nameLink = page.getByRole("table").getByRole("link").first();
+    // User name links live inside user cards — find the first one
+    const nameLink = page.getByTestId("user-card").getByRole("link").first();
     await nameLink.click();
 
     // URL must change to /users/<uuid>
@@ -192,8 +192,8 @@ test.describe("Agent performance detail page (/users/:id)", () => {
   });
 
   test("agent detail page shows KPI cards and a back link", async ({ page }) => {
-    // Grab the href from the first user-name link in the table
-    const nameLink = page.getByRole("table").getByRole("link").first();
+    // Grab the href from the first user-name link
+    const nameLink = page.getByTestId("user-card").getByRole("link").first();
     const href = await nameLink.getAttribute("href");
     expect(href).toMatch(/\/users\/[0-9a-f-]{36}$/);
 
@@ -210,7 +210,7 @@ test.describe("Agent performance detail page (/users/:id)", () => {
   });
 
   test("agent detail page is only accessible to admins (non-admin is redirected)", async ({ page }) => {
-    const nameLink = page.getByRole("table").getByRole("link").first();
+    const nameLink = page.getByTestId("user-card").getByRole("link").first();
     const href = await nameLink.getAttribute("href");
     await page.goto(href!);
 

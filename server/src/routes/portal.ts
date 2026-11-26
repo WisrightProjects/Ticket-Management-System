@@ -3,10 +3,8 @@ import { randomUUID, createHmac, timingSafeEqual, randomBytes } from "node:crypt
 import path from "node:path";
 import rateLimit from "express-rate-limit";
 import multer from "multer";
-import { hashPassword } from "better-auth/crypto";
 import {
   portalSubmitSchema,
-  portalSignupSchema,
   portalRatingSchema,
   createCommentSchema,
   implementationSubmitSchema,
@@ -15,10 +13,9 @@ import {
   PRIORITY,
   STATUS,
   ROLES,
-  STATUSES,
 } from "@tms/core";
 import prisma from "../lib/prisma.js";
-import { getAllClients, getClientBySlug, getClientProjects } from "../lib/hrms.js";
+import { getClientBySlug, getClientProjects } from "../lib/hrms.js";
 import { requireCustomer } from "../middleware/customerAuth.js";
 import {
   sendImplementationRequestSubmittedEmail,
@@ -27,20 +24,12 @@ import {
   sendTicketReopenedEmail,
 } from "../lib/mailer.js";
 import { Prisma } from "../generated/prisma/client.js";
-import { uploadArray, validateMagicBytes } from "../lib/upload.js";
+import { runImageUpload as runUpload, validateMagicBytes } from "../lib/upload.js";
 import fs from "node:fs";
 
 const router = Router();
 
 // Wrap multer's callback API into a Promise so we can use await in async routes
-function runUpload(req: Request, res: Response): Promise<void> {
-  return new Promise((resolve, reject) => {
-    uploadArray(req as any, res as any, (err: unknown) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -92,7 +81,7 @@ const PORTAL_TICKET_SELECT = {
   createdAt:       true,
   updatedAt:       true,
   assignedTo:      { select: { name: true } },
-  attachments:     { select: { id: true, filename: true, mimetype: true, size: true, filepath: true, createdAt: true } },
+  attachments:     { where: { OR: [{ commentId: null }, { comment: { isInternal: false } }] }, select: { id: true, filename: true, mimetype: true, size: true, filepath: true, createdAt: true } },
   implementationRequest: {
     select: {
       businessGoal:            true,
@@ -106,7 +95,7 @@ const PORTAL_TICKET_SELECT = {
       customerRejectionReason: true,
     },
   },
-} as const;
+} satisfies Prisma.TicketSelect;
 
 // H7 — strip characters that could cause stored XSS via filename display
 function sanitizeFilename(name: string): string {
@@ -187,328 +176,20 @@ const captchaLimiter = rateLimit({
 // POST /api/portal/auth/signup — public
 // Create a new CUSTOMER account
 // ──────────────────────────────────────
-router.post("/auth/signup", signupLimiter, async (req, res) => {
-  const parsed = portalSignupSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ fieldErrors: parsed.error.flatten().fieldErrors });
-    return;
-  }
-
-  const { name, email, password, clientId } = parsed.data;
-
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    res.status(409).json({ error: "An account with this email already exists" });
-    return;
-  }
-
-  // Validate clientId against HRMS if provided (skip in test mode or when HRMS is unreachable)
-  if (clientId && process.env.NODE_ENV !== "test") {
-    const clients = await getAllClients();
-    if (clients.length > 0 && !clients.some((c) => c.id === clientId)) {
-      res.status(400).json({ error: "Invalid client" });
-      return;
-    }
-  }
-
-  try {
-    const hashedPassword = await hashPassword(password);
-    const userId = randomUUID();
-    await prisma.$transaction(async (tx) => {
-      await tx.user.create({
-        data: {
-          id:             userId,
-          name,
-          email,
-          role:           ROLES.CUSTOMER,
-          emailVerified:  true,
-          isActive:       true,
-          portalClientId: clientId ?? null,
-        },
-      });
-      await tx.account.create({
-        data: {
-          id:         randomUUID(),
-          userId,
-          accountId:  userId,
-          providerId: "credential",
-          password:   hashedPassword,
-        },
-      });
-    });
-    res.status(201).json({ success: true });
-  } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      res.status(409).json({ error: "An account with this email already exists" });
-      return;
-    }
-    res.status(500).json({ error: "Failed to create account" });
-  }
+router.post("/auth/signup", signupLimiter, (_req, res) => {
+ res.status(403).json({ error: "Ask your administrator for an invitation to set up your account" });
 });
 
 // PATCH /api/portal/me/client — update the logged-in customer's portal client association
 // Called after login to bind the session to the portal they're accessing
-router.patch("/me/client", requireCustomer, async (req, res) => {
-  const { clientId } = req.body as { clientId?: string };
-  if (!clientId || typeof clientId !== "string") {
-    res.status(400).json({ error: "clientId is required" });
-    return;
-  }
-  // Validate that clientId is a real active HRMS client (skip in test mode)
-  if (process.env.NODE_ENV !== "test") {
-    const clients = await getAllClients();
-    // M-2 — fail closed: if HRMS is unreachable (empty list), reject rather than silently allow
-    if (clients.length === 0) {
-      res.status(503).json({ error: "Cannot verify client — please try again later" });
-      return;
-    }
-    if (!clients.some((c) => c.id === clientId)) {
-      res.status(400).json({ error: "Invalid client" });
-      return;
-    }
-  }
-  await prisma.user.update({
-    where: { id: req.user!.id },
-    data:  { portalClientId: clientId },
-  });
-  res.json({ success: true });
+router.patch("/me/client", requireCustomer, async (_req, res) => {
+ res.status(403).json({ error: "Organization membership is managed by your administrator" });
 });
 
 // GET /api/portal/dashboard — summary stats for the logged-in customer
 // ──────────────────────────────────────
-router.get("/dashboard", requireCustomer, async (req, res) => {
-  const email          = req.user!.email;
-  const portalClientId = (req.user as any).portalClientId as string | null;
+// Dashboard and request listing are handled by customer-workspace.ts using membership predicates.
 
-  // M8 — reject requests with no client association to prevent cross-client data leakage
-  if (!portalClientId) {
-    res.status(403).json({ error: "No client association found. Please log in again via your portal link." });
-    return;
-  }
-  const clientFilter: Prisma.TicketWhereInput = { hrmsClientId: portalClientId };
-
-  // Optional ?month=YYYY-MM filter — when set, count tickets created in that
-  // calendar month. When absent, defaults to current calendar month.
-  const monthParam = typeof req.query.month === "string" ? req.query.month : undefined;
-  let monthRange: { gte: Date; lt: Date };
-  if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
-    const [y, m] = monthParam.split("-").map(Number);
-    monthRange = {
-      gte: new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)),
-      lt:  new Date(Date.UTC(y, m,     1, 0, 0, 0)),
-    };
-  } else {
-    const now   = new Date();
-    const gte   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(),     1));
-    const lt    = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-    monthRange  = { gte, lt };
-  }
-  const monthFilter = { createdAt: { gte: monthRange.gte, lt: monthRange.lt } };
-
-  const [total, statusCounts, openTickets, recent, dailyRaw, newRequirementsTotal, bugSupportTotal] = await Promise.all([
-    prisma.ticket.count({ where: { senderEmail: email, ...clientFilter, ...monthFilter } }),
-
-    prisma.ticket.groupBy({
-      by: ["status"],
-      where: { senderEmail: email, ...clientFilter, ...monthFilter },
-      _count: { _all: true },
-    }),
-
-    // All non-closed tickets (customer's active work items)
-    prisma.ticket.findMany({
-      where: {
-        senderEmail: email,
-        ...clientFilter,
-        status: { not: "CLOSED" as any },
-      },
-      orderBy: { updatedAt: "desc" },
-      take: 10,
-      select: {
-        id: true, ticketId: true, title: true,
-        status: true, priority: true,
-        createdAt: true, updatedAt: true,
-      },
-    }),
-
-    // Recent 5 tickets (any status)
-    prisma.ticket.findMany({
-      where:   { senderEmail: email, ...clientFilter },
-      orderBy: { createdAt: "desc" },
-      take:    5,
-      select:  PORTAL_TICKET_SELECT,
-    }),
-
-    // Daily ticket counts for the selected month
-    prisma.$queryRaw<Array<{ day: number; count: number }>>`
-        SELECT DATE_PART('day', "createdAt")::int AS day,
-               COUNT(*)::int                       AS count
-        FROM   tickets
-        WHERE  "senderEmail" = ${email}
-          AND  "hrmsClientId" = ${portalClientId}
-          AND  "createdAt"   >= ${monthRange.gte}
-          AND  "createdAt"   <  ${monthRange.lt}
-        GROUP  BY DATE_PART('day', "createdAt")
-        ORDER  BY day
-      `.catch((err: unknown) => {
-      console.error("[portal/dashboard] daily query error:", err instanceof Error ? err.message : String(err));
-      return [] as Array<{ day: number; count: number }>;
-    }),
-
-    // Customer's new-requirement (IMPLEMENTATION) tickets in the selected month
-    prisma.ticket.count({
-      where: { senderEmail: email, ...clientFilter, ...monthFilter, type: "IMPLEMENTATION" },
-    }),
-
-    // Customer's bug/support (everything except IMPLEMENTATION)
-    prisma.ticket.count({
-      where: { senderEmail: email, ...clientFilter, ...monthFilter, type: { not: "IMPLEMENTATION" } },
-    }),
-  ]);
-
-  // Explicit number conversion (Prisma 7 may return BigInt for _count)
-  const getCount = (status: string) =>
-    Number(statusCounts.find((r) => String(r.status) === status)?._count._all ?? 0);
-
-  const unAssigned = getCount("UN_ASSIGNED");
-  const notStarted = getCount("OPEN_NOT_STARTED");
-  const inProgress = getCount("OPEN_IN_PROGRESS");
-  const qa         = getCount("OPEN_QA");
-  const done       = getCount("OPEN_DONE");
-  const closed     = getCount("CLOSED");
-  // Implementation-request workflow statuses count toward "open" (active) too
-  const submitted        = getCount("SUBMITTED");
-  const adminReview      = getCount("ADMIN_REVIEW");
-  const planning         = getCount("PLANNING");
-  const customerApproval = getCount("CUSTOMER_APPROVAL");
-  const approved         = getCount("APPROVED");
-  const reopened   = getCount("REOPENED");
-  const open       = notStarted + inProgress + qa + done + submitted + adminReview + planning + customerApproval + approved + reopened;
-
-  res.json({
-    total,
-    open,
-    unAssigned,
-    closed,
-    statusBreakdown: { unAssigned, notStarted, inProgress, qa, done, closed },
-    openTickets: openTickets.map((t) => ({
-      id:        t.id,
-      ticketId:  t.ticketId,
-      title:     t.title,
-      status:    String(t.status),
-      priority:  String(t.priority),
-      updatedAt: t.updatedAt.toISOString(),
-      createdAt: t.createdAt.toISOString(),
-    })),
-    daily: dailyRaw.map((r) => ({ day: Number(r.day), count: Number(r.count) })),
-    recent,
-    newRequirementsTotal,
-    bugSupportTotal,
-  });
-});
-
-// ──────────────────────────────────────
-// GET /api/portal/tickets — list customer's tickets
-// ──────────────────────────────────────
-router.get("/tickets", requireCustomer, async (req, res) => {
-  const {
-    status,
-    priority,
-    search,
-    from,
-    to,
-    sortOrder = "desc",
-    page      = "1",
-    pageSize  = "10",
-  } = req.query as Record<string, string | undefined>;
-
-  // type can be a single string or an array (e.g. ?type=BUG&type=SUPPORT)
-  const rawType = req.query.type;
-  const typeFilter: string[] | undefined = rawType
-    ? (Array.isArray(rawType) ? rawType as string[] : [rawType as string])
-    : undefined;
-
-  const pageNum  = Math.max(1, parseInt(page  ?? "1",  10) || 1);
-  const pageSz   = Math.min(100, Math.max(1, parseInt(pageSize ?? "10", 10) || 10));
-  const order    = sortOrder === "asc" ? "asc" : "desc";
-
-  const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
-
-  const portalClientId = (req.user as any).portalClientId as string | null;
-
-  // M9 — reject requests with no client association to prevent cross-client data leakage
-  if (!portalClientId) {
-    res.status(403).json({ error: "No client association found. Please log in again via your portal link." });
-    return;
-  }
-  const where: Prisma.TicketWhereInput = {
-    senderEmail:  req.user!.email,
-    hrmsClientId: portalClientId,
-  };
-
-  const TICKET_TYPES_SET = new Set(["BUG", "REQUIREMENT", "TASK", "SUPPORT", "EXPLANATION", "IMPLEMENTATION"]);
-  if (typeFilter && typeFilter.some((t) => !TICKET_TYPES_SET.has(t))) {
-    res.status(400).json({ error: "Invalid type value" });
-    return;
-  }
-  if (typeFilter && typeFilter.length > 0) {
-    where.type = { in: typeFilter as any[] };
-  }
-  if (status) {
-    if (!(STATUSES as readonly string[]).includes(status)) {
-      res.status(400).json({ error: "Invalid status value" });
-      return;
-    }
-    where.status = status as any;
-  }
-  if (priority) {
-    if (!(PRIORITIES as readonly string[]).includes(priority)) {
-      res.status(400).json({ error: "Invalid priority value" });
-      return;
-    }
-    where.priority = priority as any;
-  }
-  if (search && search.trim()) {
-    const q = search.trim().slice(0, 200); // L-2 — cap length to prevent excessive DB work
-    where.OR = [
-      { title:       { contains: q, mode: "insensitive" } },
-      { description: { contains: q, mode: "insensitive" } },
-      { ticketId:    { contains: q, mode: "insensitive" } },
-    ];
-  }
-  if (from && isNaN(new Date(from).getTime())) {
-    res.status(400).json({ error: "Invalid 'from' date format" });
-    return;
-  }
-  if (to && isNaN(new Date(to).getTime())) {
-    res.status(400).json({ error: "Invalid 'to' date format" });
-    return;
-  }
-  if (from)   where.createdAt = { ...(where.createdAt as any), gte: new Date(from) };
-  if (to)     where.createdAt = { ...(where.createdAt as any), lte: new Date(to) };
-
-  const [rows, total] = await Promise.all([
-    prisma.ticket.findMany({
-      where,
-      orderBy: { createdAt: order },
-      skip:    (pageNum - 1) * pageSz,
-      take:    pageSz,
-      select:  PORTAL_TICKET_SELECT,
-    }),
-    prisma.ticket.count({ where }),
-  ]);
-
-  res.json({
-    data:       rows,
-    total,
-    page:       pageNum,
-    pageSize:   pageSz,
-    totalPages: Math.ceil(total / pageSz),
-  });
-});
-
-// ──────────────────────────────────────
-// GET /api/portal/tickets/:id — get single ticket (with comment count)
-// ──────────────────────────────────────
 router.get("/tickets/:id", requireCustomer, async (req: Request<{ id: string }>, res: Response) => {
   const ticket = await prisma.ticket.findUnique({
     where:  { ticketId: req.params.id },
@@ -523,13 +204,14 @@ router.get("/tickets/:id", requireCustomer, async (req: Request<{ id: string }>,
     return;
   }
 
-  if (ticket.senderEmail !== req.user!.email) {
+  if (req.method !== "GET" && ticket.senderEmail !== req.user!.email) {
     res.status(403).json({ error: "Access denied" });
     return;
   }
 
   res.json({
     ...ticket,
+    assignedTo: ticket.assignedTo ? { name: "Support Team" } : null,
     attachments: ticket.attachments.map((a) => ({
       id:        a.id,
       filename:  a.filename,
@@ -555,13 +237,13 @@ router.get("/tickets/:id/comments", requireCustomer, async (req: Request<{ id: s
     return;
   }
 
-  if (ticket.senderEmail !== req.user!.email) {
+  if (req.method !== "GET" && ticket.senderEmail !== req.user!.email) {
     res.status(403).json({ error: "Access denied" });
     return;
   }
 
   const comments = await prisma.comment.findMany({
-    where:   { ticketId: ticket.id },
+    where:   { ticketId: ticket.id, isInternal: false },
     select:  {
       id:          true,
       content:     true,
@@ -575,6 +257,7 @@ router.get("/tickets/:id/comments", requireCustomer, async (req: Request<{ id: s
 
   res.json(comments.map((c) => ({
     ...c,
+    author: c.senderType === "AGENT" ? { name: "Support Team" } : c.author,
     attachments: c.attachments.map((a) => ({
       id:       a.id,
       filename: a.filename,
@@ -622,7 +305,7 @@ router.post("/tickets/:id/comments", requireCustomer, async (req: Request<{ id: 
     return;
   }
 
-  if (ticket.senderEmail !== req.user!.email) {
+  if (req.method !== "GET" && ticket.senderEmail !== req.user!.email) {
     res.status(403).json({ error: "Access denied" });
     return;
   }
@@ -712,7 +395,7 @@ router.patch("/tickets/:id/rating", requireCustomer, async (req: Request<{ id: s
     return;
   }
 
-  if (ticket.senderEmail !== req.user!.email) {
+  if (req.method !== "GET" && ticket.senderEmail !== req.user!.email) {
     res.status(403).json({ error: "Access denied" });
     return;
   }
@@ -803,6 +486,8 @@ router.get("/projects", requireCustomer, async (req, res) => {
     res.status(400).json({ error: "clientId query param required" });
     return;
   }
+  const membership = await prisma.organizationMembership.findFirst({ where: { userId: req.user!.id, organization: { hrmsClientId: clientId, isActive: true } } });
+  if (!membership) { res.status(403).json({ error: "Organization access required" }); return; }
   const projects = await getClientProjects(clientId);
   res.json(projects);
 });
@@ -1031,10 +716,13 @@ router.post("/tickets/:id/approve-plan", requireCustomer, async (req: Request<{ 
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.ticket.updateMany({ where: { id: ticket.id, status: STATUS.CUSTOMER_APPROVAL }, data: { status: STATUS.APPROVED } });
+    if (claimed.count !== 1) throw new Error("Plan status changed; refresh this request");
     await tx.implementationRequest.update({
       where: { ticketId: ticket.id },
       data:  { customerApprovedAt: new Date(), customerRejectedAt: null, customerRejectionReason: null },
     });
+    await tx.ticketHistory.create({ data: { ticketId: ticket.id, changedById: req.user!.id, field: "status", oldValue: ticket.status, newValue: STATUS.APPROVED } });
     return tx.ticket.update({
       where:  { id: ticket.id },
       data:   { status: STATUS.APPROVED },
@@ -1079,10 +767,13 @@ router.post("/tickets/:id/reject-plan", requireCustomer, async (req: Request<{ i
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.ticket.updateMany({ where: { id: ticket.id, status: STATUS.CUSTOMER_APPROVAL }, data: { status: STATUS.PLANNING } });
+    if (claimed.count !== 1) throw new Error("Plan status changed; refresh this request");
     await tx.implementationRequest.update({
       where: { ticketId: ticket.id },
       data:  { customerRejectedAt: new Date(), customerRejectionReason: parsed.data.reason, customerApprovedAt: null },
     });
+    await tx.ticketHistory.create({ data: { ticketId: ticket.id, changedById: req.user!.id, field: "status", oldValue: ticket.status, newValue: STATUS.PLANNING } });
     return tx.ticket.update({
       where:  { id: ticket.id },
       data:   { status: STATUS.PLANNING },

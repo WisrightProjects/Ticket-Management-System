@@ -41,9 +41,11 @@ export const CATEGORY_LABELS: Record<TicketTypeValue, string> = {
 
 // Additive className applied alongside the badge variant returned by typeVariant().
 // Lets IMPLEMENTATION read distinctly without expanding the BadgeVariant union.
+// Sourced from TYPE_CONFIG.IMPLEMENTATION (index.css --type-implementation-*) via
+// Tailwind arbitrary-value syntax, so there's one indigo definition, not two.
 export const CATEGORY_CLASS: Partial<Record<TicketTypeValue, string>> = {
   [TICKET_TYPE.IMPLEMENTATION]:
-    "text-indigo-600 border-indigo-600 dark:text-indigo-400 dark:border-indigo-400",
+    "text-[var(--type-implementation-text)] border-[var(--type-implementation-dot)]",
 };
 
 export const PRIORITY_LABELS: Record<PriorityValue, string> = {

@@ -1,23 +1,9 @@
+import { useStaffSupportRole } from "@/hooks/useStaffSupportRole";
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Inbox, Users, BarChart2, Building2, Ticket, Plus } from "lucide-react";
+import { isStaffPage, staffSections } from "@/lib/staff-navigation";
 import { useSession } from "@/lib/auth-client";
 import { ROLES, type UserRole } from "@tms/core";
-
-const NAV_ITEMS = [
-  { path: "/",        label: "Dashboard", icon: LayoutDashboard, exact: true  },
-  { path: "/tickets", label: "Tickets",   icon: Inbox,           exact: false },
-];
-
-const AGENT_ITEMS = [
-  { path: "/internal/tickets", label: "My Tickets", icon: Ticket, exact: false },
-];
-
-const ADMIN_ITEMS = [
-  { path: "/users",            label: "Users",        icon: Users,     exact: false },
-  { path: "/clients",          label: "Clients",      icon: Building2, exact: false },
-  { path: "/analytics",        label: "Analytics",    icon: BarChart2, exact: false },
-  { path: "/internal/submit",  label: "Raise Ticket", icon: Plus,      exact: false },
-];
+import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   open?: boolean;
@@ -27,75 +13,53 @@ interface SidebarProps {
 export default function Sidebar({ open = false, onClose }: SidebarProps) {
   const location = useLocation();
   const { data: session } = useSession();
-  const isAdmin = (session?.user as { role: UserRole } | undefined)?.role === ROLES.ADMIN;
+  const supportRole = useStaffSupportRole(session?.user.id).data;
+  const isAdmin = !supportRole && (session?.user as { role: UserRole } | undefined)?.role === ROLES.ADMIN;
 
-  const isActive = (path: string, exact: boolean) =>
-    exact
-      ? location.pathname === path
-      : location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
-
-  const allItems = [...NAV_ITEMS, ...(isAdmin ? ADMIN_ITEMS : AGENT_ITEMS)];
+  const sections = staffSections
+    .filter((section) => section.allowTsa ? isAdmin || supportRole === "TSA" : isAdmin || !section.adminOnly)
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) =>
+        item.path !== "/internal/submit" || (supportRole !== "MEMBER" && supportRole !== "PROJECT_LEAD")),
+    }));
 
   return (
     <aside
-      className={[
-        "fixed md:sticky top-[56px] left-0 z-40 md:z-auto",
-        "h-[calc(100vh-56px)] overflow-y-auto",
+      className={cn(
+        "fixed md:sticky top-[60px] left-0 z-40 md:z-auto",
+        "h-[calc(100vh-60px)] overflow-y-auto",
         "transition-transform duration-300 ease-in-out",
-        open ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-      ].join(" ")}
-      style={{
-        width:          "240px",
-        flexShrink:     0,
-        background:     "#ffffff",
-        borderRight:    "1px solid #ffd0d0",
-        boxShadow:      "2px 0 16px rgba(204,0,0,0.08)",
-        padding:        "16px 12px",
-        display:        "flex",
-        flexDirection:  "column",
-        gap:            "2px",
-      }}
+        "w-[240px] shrink-0 px-3 py-4",
+        "bg-[var(--rt-nav-bg)] border-r border-[var(--rt-nav-border)]",
+        open ? "visible translate-x-0" : "invisible -translate-x-full md:visible md:translate-x-0"
+      )}
     >
-      {allItems.map(({ path, label, icon: Icon, exact }) => {
-        const active = isActive(path, exact);
+      <nav aria-label="Staff navigation" className="grid gap-5">
+      {sections.map((section) => <div key={section.label} role="group" aria-label={section.label} className="grid gap-1">
+      <p className="px-3 pb-1 text-xs font-medium text-[var(--rt-nav-muted)]">{section.label}</p>
+      {section.items.map(({ path, label, icon: Icon, exact }) => {
+        const active = isStaffPage(location.pathname, path, exact);
         return (
           <Link
             key={path}
             to={path}
             onClick={onClose}
-            style={{
-              display:        "flex",
-              alignItems:     "center",
-              gap:            "10px",
-              padding:        "9px 12px",
-              paddingLeft:    "9px",
-              borderRadius:   "8px",
-              textDecoration: "none",
-              fontWeight:     active ? 700 : 500,
-              fontSize:       "14px",
-              color:          active ? "#990000" : "#4a0a0a",
-              background:     active ? "rgba(204,0,0,0.08)" : "transparent",
-              borderLeft:     active ? "3px solid #ca8a04" : "3px solid transparent",
-              transition:     "background 0.15s, color 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              if (!active) {
-                (e.currentTarget as HTMLElement).style.background = "rgba(204,0,0,0.05)";
-                (e.currentTarget as HTMLElement).style.color      = "#990000";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!active) {
-                (e.currentTarget as HTMLElement).style.background = "transparent";
-                (e.currentTarget as HTMLElement).style.color      = "#4a0a0a";
-              }
-            }}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex min-h-10 items-center gap-2.5 rounded-lg border-l-2 px-3 text-sm no-underline transition-colors",
+              active
+                ? "border-l-[var(--rt-active-indicator)] bg-[var(--rt-nav-active)] font-semibold text-[var(--rt-nav-active-text)]"
+                : "border-l-transparent font-medium text-[var(--rt-nav-text)] hover:bg-[var(--rt-nav-hover)]"
+            )}
           >
-            <Icon size={18} style={{ flexShrink: 0, color: active ? "#ca8a04" : "#9ca3af" }} />
+            <Icon size={17} aria-hidden="true" className={cn("shrink-0", !active && "text-[var(--rt-nav-muted)]")} />
             {label}
           </Link>
         );
       })}
+      </div>)}
+      </nav>
     </aside>
   );
 }

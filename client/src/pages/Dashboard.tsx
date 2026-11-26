@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/PageHeader";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { STATUS_CONFIG, PRIORITY_CONFIG } from "@/lib/status-config";
 import {
   BarChart,
   Bar,
@@ -103,27 +106,12 @@ const STATUS_DOT: Record<string, string> = {
   CLOSED:           "bg-green-500",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  UN_ASSIGNED:      "#94a3b8",
-  OPEN_NOT_STARTED: "#f59e0b",
-  OPEN_IN_PROGRESS: "#3b82f6",
-  OPEN_QA:          "#8b5cf6",
-  OPEN_DONE:        "#14b8a6",
-  CLOSED:           "#22c55e",
-};
-
 const PRIORITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
 const PRIORITY_LABELS_MAP: Record<string, string> = {
   LOW:      "Low",
   MEDIUM:   "Medium",
   HIGH:     "High",
   CRITICAL: "Critical",
-};
-const PRIORITY_COLORS: Record<string, string> = {
-  LOW:      "#94a3b8",
-  MEDIUM:   "#f59e0b",
-  HIGH:     "#f97316",
-  CRITICAL: "#ef4444",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -246,37 +234,29 @@ function Dashboard() {
 
   return (
     <div className="px-4 sm:px-6 py-6 sm:py-8 max-w-7xl mx-auto">
-      {/* Page header */}
-      <div className="mb-7 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight" style={{ color: "var(--rt-text-1)" }}>
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--rt-text-3)" }}>
-            Support queue overview — today's snapshot and trends
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="month-filter" className="text-xs font-medium" style={{ color: "var(--rt-text-3)" }}>
-            Month:
-          </label>
-          <select
-            id="month-filter"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="h-8 text-xs rounded-md px-2 border bg-background"
-            style={{ borderColor: "var(--rt-border)" }}
-          >
-            {monthOptions.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Support queue overview — today's snapshot and trends"
+        actions={
+          <>
+            <label htmlFor="month-filter" className="text-xs font-medium text-muted-foreground">
+              Month:
+            </label>
+            <select
+              id="month-filter"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="h-8 text-xs rounded-md px-2 border border-border bg-background"
+            >
+              {monthOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </>
+        }
+      />
 
-      {isError && (
-        <p className="text-destructive mb-4 text-sm">Failed to load dashboard stats.</p>
-      )}
+      {isError && <ErrorBanner message="Failed to load dashboard stats." className="mb-4" />}
 
       {/* ── KPI Cards ── */}
       {isLoading ? (
@@ -373,7 +353,7 @@ function Dashboard() {
                   labelFormatter={(label) => formatChartDate(String(label))}
                   cursor={{ fill: "var(--rt-surface-2)" }}
                 />
-                <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="count" fill="var(--rt-accent)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -446,7 +426,7 @@ function Dashboard() {
                         </span>
                       </div>
                       <p className="text-sm text-foreground mt-0.5 truncate">{item.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5 font-medium" style={{ color: "var(--rt-accent)" }}>
+                      <p className="text-xs mt-0.5 font-medium text-[var(--rt-accent)]">
                         {item.clientName}
                       </p>
                     </div>
@@ -484,7 +464,7 @@ function Dashboard() {
                       paddingAngle={2}
                     >
                       {(stats?.statusBreakdown ?? []).map((entry) => (
-                        <Cell key={entry.status} fill={STATUS_COLORS[entry.status] ?? "#94a3b8"} />
+                        <Cell key={entry.status} fill={STATUS_CONFIG[entry.status]?.dot ?? STATUS_CONFIG.UN_ASSIGNED.dot} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(v, name) => [v, STATUS_LABELS[String(name)] ?? name]} />
@@ -519,7 +499,7 @@ function Dashboard() {
                     <Tooltip formatter={(v) => [v, "Tickets"]} labelFormatter={(l) => PRIORITY_LABELS_MAP[l] ?? l} />
                     <Bar dataKey="count" radius={[0, 3, 3, 0]}>
                       {PRIORITY_ORDER.map((p) => (
-                        <Cell key={p} fill={PRIORITY_COLORS[p]} />
+                        <Cell key={p} fill={PRIORITY_CONFIG[p].dot} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -554,8 +534,7 @@ function Dashboard() {
                         {STATUS_LABELS[item.status] ?? item.status}
                       </span>
                       {item.project === "WiseWork Support" && (
-                        <span className="text-xs px-1.5 py-0.5 rounded font-medium"
-                          style={{ background: "#fff3e0", color: "#e65100" }}>
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-700">
                           WiseWork
                         </span>
                       )}

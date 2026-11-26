@@ -1,6 +1,7 @@
 import pg from "pg";
 import path from "path";
 import dotenv from "dotenv";
+import { assertDatabaseTarget } from "../server/src/lib/database-safety";
 
 dotenv.config({ path: path.resolve(__dirname, "../server/.env") });
 
@@ -9,6 +10,8 @@ const testDbUrl =
   "postgresql://tms_user:tms_password@localhost:5433/ticket_management_test";
 
 async function globalTeardown() {
+  assertDatabaseTarget(testDbUrl);
+  if (new URL(testDbUrl).pathname !== "/ticket_management_test") throw new Error("Test teardown may clean only ticket_management_test");
   console.log("Cleaning up test database...");
 
   const pool = new pg.Pool({ connectionString: testDbUrl });

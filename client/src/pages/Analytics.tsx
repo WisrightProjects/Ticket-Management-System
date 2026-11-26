@@ -16,6 +16,10 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/PageHeader";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { STATUS_CONFIG, PRIORITY_CONFIG, TYPE_CONFIG } from "@/lib/status-config";
+import { SectionHeader } from "@/components/SectionHeader";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -47,24 +51,6 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED:           "Closed",
 };
 
-const PRIORITY_COLORS: Record<string, string> = {
-  LOW:      "#22C55E",
-  MEDIUM:   "#F59E0B",
-  HIGH:     "#EF4444",
-  CRITICAL: "#7C3AED",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  UN_ASSIGNED:      "#9CA3AF",
-  OPEN_NOT_STARTED: "#F59E0B",
-  OPEN_IN_PROGRESS: "#3B82F6",
-  OPEN_QA:          "#8B5CF6",
-  OPEN_DONE:        "#14B8A6",
-  CLOSED:           "#22C55E",
-};
-
-const TYPE_COLORS = ["#cc0000", "#3B82F6", "#8B5CF6", "#22C55E"];
-
 const OPEN_STATUSES = ["OPEN_NOT_STARTED", "OPEN_IN_PROGRESS", "OPEN_QA", "OPEN_DONE"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,22 +78,16 @@ function SummaryCard({
     <div
       className={`rounded-xl border p-5 ${
         accent
-          ? "text-white border-[#cc0000]"
+          ? "text-white border-transparent"
           : "bg-card border-border"
       }`}
-      style={accent ? { background: "linear-gradient(135deg, #0a0000 0%, #990000 50%, #cc0000 100%)" } : {}}
+      style={accent ? { background: "var(--rt-header-gradient)" } : {}}
     >
-      <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${accent ? "text-red-100" : "text-muted-foreground"}`}>
+      <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${accent ? "text-white/70" : "text-muted-foreground"}`}>
         {label}
       </p>
       <p className={`text-3xl font-bold ${accent ? "text-white" : "text-foreground"}`}>{value}</p>
     </div>
-  );
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">{title}</h2>
   );
 }
 
@@ -186,9 +166,7 @@ export default function Analytics() {
   if (isError || !data) {
     return (
       <div className="px-4 sm:px-6 py-6 sm:py-8">
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-4 rounded-lg">
-          Failed to load analytics. Please refresh the page.
-        </div>
+        <ErrorBanner message="Failed to load analytics. Please refresh the page." />
       </div>
     );
   }
@@ -203,19 +181,19 @@ export default function Analytics() {
   const statusChartData = data.byStatus.map((s) => ({
     name:  STATUS_LABELS[s.status] ?? s.status,
     value: s.count,
-    fill:  STATUS_COLORS[s.status] ?? "#9CA3AF",
+    fill:  STATUS_CONFIG[s.status]?.dot ?? STATUS_CONFIG.UN_ASSIGNED.dot,
   }));
 
   const priorityChartData = data.byPriority.map((p) => ({
     name:  p.priority.charAt(0) + p.priority.slice(1).toLowerCase(),
     value: p.count,
-    fill:  PRIORITY_COLORS[p.priority] ?? "#9CA3AF",
+    fill:  PRIORITY_CONFIG[p.priority]?.dot ?? PRIORITY_CONFIG.LOW.dot,
   }));
 
-  const typeChartData = data.byType.map((t, i) => ({
+  const typeChartData = data.byType.map((t) => ({
     name:  t.type.charAt(0) + t.type.slice(1).toLowerCase().replace(/_/g, " "),
     count: t.count,
-    fill:  TYPE_COLORS[i % TYPE_COLORS.length],
+    fill:  TYPE_CONFIG[t.type]?.dot ?? TYPE_CONFIG.TASK.dot,
   }));
 
   const volumeChartData = data.dailyVolume.map((d) => ({
@@ -235,16 +213,16 @@ export default function Analytics() {
     .map((r) => ({
       name:     r!.priority.charAt(0) + r!.priority.slice(1).toLowerCase(),
       avgHours: r!.avgHours,
-      fill:     PRIORITY_COLORS[r!.priority] ?? "#9CA3AF",
+      fill:     PRIORITY_CONFIG[r!.priority]?.dot ?? PRIORITY_CONFIG.LOW.dot,
     }));
 
   return (
     <div className="px-4 sm:px-6 py-6 sm:py-8 space-y-10 max-w-7xl mx-auto">
-      {/* Page title */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Analytics</h1>
-        <p className="text-sm text-muted-foreground mt-1">Ticket activity, agent performance, and customer satisfaction</p>
-      </div>
+      <PageHeader
+        title="Analytics"
+        subtitle="Ticket activity, agent performance, and customer satisfaction"
+        className="mb-0"
+      />
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -279,10 +257,10 @@ export default function Analytics() {
               <Line
                 type="monotone"
                 dataKey="count"
-                stroke="#cc0000"
+                stroke="var(--rt-accent)"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 4, fill: "#cc0000" }}
+                activeDot={{ r: 4, fill: "var(--rt-accent)" }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -528,17 +506,17 @@ export default function Analytics() {
                       {agent.role.charAt(0) + agent.role.slice(1).toLowerCase()}
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: "rgba(204,0,0,0.1)", color: "#cc0000" }}>
+                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--rt-accent-bg)] text-[var(--rt-accent)]">
                         {agent.assignedTickets}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--status-closed-bg)] text-[var(--status-closed-text)]">
                         {agent.closedTickets}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right">
-                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--status-open-in-progress-bg)] text-[var(--status-open-in-progress-text)]">
                         {agent.commentsMade}
                       </span>
                     </td>

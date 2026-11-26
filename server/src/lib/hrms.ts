@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 // HRMS-POC API client
 // Base URL: process.env.HRMS_API_URL (e.g. http://localhost:3000/api/v1)
 // Auth: JWT Bearer token obtained via POST /auth/login
@@ -15,16 +17,22 @@ export interface HrmsClient {
   customerName: string;
 }
 
+export const localClientSnapshot = process.env.LOCAL_DEVELOPMENT_ONLY === "true"
+  ? process.env.LOCAL_WISEWORK_CLIENTS : undefined;
+
 export interface HrmsEmployee {
   id:    string;
   name:  string;
   email: string;
+  department?: string;
+  designation?: string;
 }
 
 export interface HrmsProject {
   id:          string;
   projectCode: string;
   projectName: string;
+  headEmployeeId?: string | null;
 }
 
 async function getHrmsToken(): Promise<string | null> {
@@ -36,6 +44,7 @@ async function getHrmsToken(): Promise<string | null> {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ email: HRMS_EMAIL, password: HRMS_PASSWORD }),
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) throw new Error(`HRMS auth failed: ${res.status}`);
     const data = await res.json() as { access_token: string };
@@ -59,6 +68,15 @@ export function slugifyName(name: string): string {
 
 // Get all active HRMS clients (for admin filter dropdown)
 export async function getAllClients(): Promise<HrmsClient[]> {
+  if (localClientSnapshot) {
+    try {
+      const clients = JSON.parse(await readFile(localClientSnapshot, "utf8")) as HrmsClient[];
+      return clients.sort((left, right) => left.customerName.localeCompare(right.customerName));
+    } catch (error) {
+      console.warn("[hrms] Unable to read local WiseWork client snapshot:", error);
+      return [];
+    }
+  }
   const token = await getHrmsToken();
   if (!token) return [];
 
@@ -123,6 +141,7 @@ export async function getClientProjects(customerId: string): Promise<HrmsProject
   try {
     const res = await fetch(`${HRMS_BASE}/projects/by-customer/${customerId}`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return [];
     const projects = await res.json() as Array<{
@@ -131,12 +150,35 @@ export async function getClientProjects(customerId: string): Promise<HrmsProject
       projectName: string;
       status?:     string;
       isActive?:   boolean;
+      headEmployeeId?: string | null;
     }>;
     return projects
       .filter((p) => p.isActive !== false && p.status !== "INACTIVE")
-      .map((p) => ({ id: p.id, projectCode: p.projectCode, projectName: p.projectName }));
+      .map((p) => ({ id: p.id, projectCode: p.projectCode, projectName: p.projectName, headEmployeeId: p.headEmployeeId }));
   } catch (err) {
     console.error("[hrms] getClientProjects error:", err instanceof Error ? err.message : String(err));
+    return [];
+  }
+}
+
+async function getHeadedProjectIds(employeeId: string): Promise<string[]> {
+  const token = await getHrmsToken();
+  if (!token) return [];
+  const response = await fetch(`${HRMS_BASE}/projects/dropdown`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) return [];
+  const projects = await response.json() as HrmsProject[];
+  return projects.filter((project) => project.headEmployeeId === employeeId).map((project) => project.id);
+}
+
+export async function getStaffHeadedProjects(email: string): Promise<string[]> {
+  try {
+    const employees = await getEmployeeDirectory();
+    const employee = employees.find((item) => item.email.toLowerCase() === email.toLowerCase());
+    return employee ? await getHeadedProjectIds(employee.id) : [];
+  } catch {
     return [];
   }
 }
@@ -150,6 +192,7 @@ export async function getProjectEmployees(projectId: string): Promise<HrmsEmploy
   try {
     const res = await fetch(`${HRMS_BASE}/projects/${projectId}/employees`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return [];
     const employees = await res.json() as Array<{
@@ -170,19 +213,24 @@ export async function getProjectEmployees(projectId: string): Promise<HrmsEmploy
 }
 
 // Get employee directory for assignable dropdown
-export async function getEmployeeDirectory(): Promise<HrmsEmployee[]> {
-  const token = await getHrmsToken();
-  if (!token) return [];
-
+export async function getEmployeeDirectory({ requireConnection = false } = {}): Promise<HrmsEmployee[]> {
   try {
+    const token = await getHrmsToken();
+    if (!token) {
+      if (requireConnection) throw new Error("WiseWork authentication unavailable");
+      return [];
+    }
     const res = await fetch(`${HRMS_BASE}/employees/directory`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) throw new Error(`WiseWork directory returned HTTP ${res.status}`);
     const employees = await res.json() as Array<{
       id:       string;
       isActive: boolean;
       user?:    { firstName?: string; lastName?: string; email?: string };
+      department?: { name?: string } | null;
+      designation?: { title?: string } | null;
     }>;
     return employees
       .filter((e) => e.isActive !== false)
@@ -190,9 +238,12 @@ export async function getEmployeeDirectory(): Promise<HrmsEmployee[]> {
         id:    e.id,
         name:  `${e.user?.firstName ?? ""} ${e.user?.lastName ?? ""}`.trim(),
         email: e.user?.email ?? "",
+        department: e.department?.name,
+        designation: e.designation?.title,
       }))
       .filter((e) => e.name && e.email);
   } catch (err) {
+    if (requireConnection) throw err;
     console.error("[hrms] getEmployeeDirectory error:", err instanceof Error ? err.message : String(err));
     return [];
   }

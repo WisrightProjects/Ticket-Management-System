@@ -1,5 +1,12 @@
 import nodemailer from "nodemailer";
 
+export async function sendInvitationEmail(to: string, organization: string, activationUrl: string): Promise<void> {
+  if (!isConfigured()) throw new Error("Email delivery is not configured");
+  await getTransporter().sendMail({ from: GMAIL_USER, to, subject: "Your Right Tracker invitation",
+    text: `You have been invited to ${organization.replace(/[\r\n]/g, " ")} on Right Tracker.\n\nSet your name and password: ${activationUrl}\n\nThis link expires in 48 hours. If you did not expect this invitation, ignore it.`,
+  });
+}
+
 const { GMAIL_USER, GMAIL_APP_PASSWORD } = process.env;
 
 function isConfigured(): boolean {
