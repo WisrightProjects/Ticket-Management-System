@@ -29,7 +29,7 @@ const UPDATED_USER = {
 async function loginAsAdmin(page: Page) {
   await page.goto("/login?account=local");
   await page.getByLabel("Email").fill(ADMIN_EMAIL);
-  await page.getByLabel("Password").fill(ADMIN_PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: "Sign In" }).click();
   await expect(page).toHaveURL("/");
 }

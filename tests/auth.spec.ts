@@ -11,7 +11,7 @@ async function fillAndSubmitLogin(
   password: string
 ) {
   await page.getByLabel("Email address").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign In" }).click();
 }
 
@@ -50,7 +50,7 @@ test.describe("Login page rendering", () => {
       page.getByRole("heading", { name: "Right Tracker sign in" })
     ).toBeVisible();
     await expect(page.getByLabel("Email address")).toBeVisible();
-    await expect(page.getByLabel("Password")).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Sign In" })
     ).toBeVisible();
@@ -60,11 +60,11 @@ test.describe("Login page rendering", () => {
     page,
   }) => {
     await expect(page.getByLabel("Email address")).toHaveValue("");
-    await expect(page.getByLabel("Password")).toHaveValue("");
+    await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
   });
 
   test("password field masks input", async ({ page }) => {
-    await expect(page.getByLabel("Password")).toHaveAttribute(
+    await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute(
       "type",
       "password"
     );
@@ -99,7 +99,7 @@ test.describe("Successful login", () => {
   }) => {
     await page.goto("/login?account=local");
     await page.getByLabel("Email address").fill("admin@wisright.com");
-    await page.getByLabel("Password").fill("Test@123");
+    await page.getByLabel("Password", { exact: true }).fill("Test@123");
 
     // Intercept the auth request so we can observe the in-flight state
     let resolveRequest!: () => void;
@@ -144,8 +144,8 @@ test.describe("Client-side form validation", () => {
   test("shows error when password field is left empty and then blurred", async ({
     page,
   }) => {
-    await page.getByLabel("Password").focus();
-    await page.getByLabel("Password").blur();
+    await page.getByLabel("Password", { exact: true }).focus();
+    await page.getByLabel("Password", { exact: true }).blur();
     await expect(
       page.getByText("Password must be at least 8 characters")
     ).toBeVisible();
@@ -172,8 +172,8 @@ test.describe("Client-side form validation", () => {
   test("shows password too short error for passwords under 8 characters", async ({
     page,
   }) => {
-    await page.getByLabel("Password").fill("short");
-    await page.getByLabel("Password").blur();
+    await page.getByLabel("Password", { exact: true }).fill("short");
+    await page.getByLabel("Password", { exact: true }).blur();
     await expect(
       page.getByText("Password must be at least 8 characters")
     ).toBeVisible();
@@ -184,8 +184,8 @@ test.describe("Client-side form validation", () => {
   }) => {
     await page.getByLabel("Email address").fill("admin@wisright.com");
     await page.getByLabel("Email address").blur();
-    await page.getByLabel("Password").fill("Test@123");
-    await page.getByLabel("Password").blur();
+    await page.getByLabel("Password", { exact: true }).fill("Test@123");
+    await page.getByLabel("Password", { exact: true }).blur();
 
     await expect(page.getByText("Email is required")).not.toBeVisible();
     await expect(
@@ -242,7 +242,7 @@ test.describe("Server-side authentication errors", () => {
 
     // User updates the password field — the error div should disappear on
     // the next submission attempt with the correct password
-    await page.getByLabel("Password").fill("Test@123");
+    await page.getByLabel("Password", { exact: true }).fill("Test@123");
     await page.getByRole("button", { name: "Sign In" }).click();
     await expect(page).toHaveURL("/");
   });
@@ -498,16 +498,16 @@ test.describe("Edge cases and security inputs", () => {
   test("password at exactly the minimum length (8 chars) passes client validation", async ({
     page,
   }) => {
-    await page.getByLabel("Password").fill("Exact8!!");
-    await page.getByLabel("Password").blur();
+    await page.getByLabel("Password", { exact: true }).fill("Exact8!!");
+    await page.getByLabel("Password", { exact: true }).blur();
     await expect(
       page.getByText("Password must be at least 8 characters")
     ).not.toBeVisible();
   });
 
   test("password of 7 characters fails client validation", async ({ page }) => {
-    await page.getByLabel("Password").fill("Short7!");
-    await page.getByLabel("Password").blur();
+    await page.getByLabel("Password", { exact: true }).fill("Short7!");
+    await page.getByLabel("Password", { exact: true }).blur();
     await expect(
       page.getByText("Password must be at least 8 characters")
     ).toBeVisible();
@@ -519,8 +519,8 @@ test.describe("Edge cases and security inputs", () => {
     // This password is structurally valid (length >= 8) — client validation passes,
     // server rejects because it's the wrong password
     const specialPassword = "P@$$w0rd#!^&*()";
-    await page.getByLabel("Password").fill(specialPassword);
-    await page.getByLabel("Password").blur();
+    await page.getByLabel("Password", { exact: true }).fill(specialPassword);
+    await page.getByLabel("Password", { exact: true }).blur();
     // No client validation error for a valid-length password
     await expect(
       page.getByText("Password must be at least 8 characters")

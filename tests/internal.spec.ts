@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 async function loginAsAdmin(page: Page) {
   await page.goto("/login?account=local");
   await page.getByLabel("Email address").fill("admin@wisright.com");
-  await page.getByLabel("Password").fill("Test@123");
+  await page.getByLabel("Password", { exact: true }).fill("Test@123");
   await page.getByRole("button", { name: "Sign In" }).click();
   await expect(page).toHaveURL("/");
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
