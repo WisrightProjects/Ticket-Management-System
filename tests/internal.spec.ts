@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 async function loginAsAdmin(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?account=local");
   await page.getByLabel("Email address").fill("admin@wisright.com");
   await page.getByLabel("Password").fill("Test@123");
   await page.getByRole("button", { name: "Sign In" }).click();
@@ -14,10 +14,10 @@ async function loginAsAdmin(page: Page) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe("Internal tickets — sidebar nav", () => {
-  test("admin sees Raise Ticket in sidebar, not My Tickets", async ({ page }) => {
+  test("admin sees Raise Ticket and My Tickets in sidebar", async ({ page }) => {
     await loginAsAdmin(page);
     await expect(page.getByRole("link", { name: "Raise Ticket" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "My Tickets" })).not.toBeVisible();
+    await expect(page.getByRole("link", { name: "My Tickets" })).toBeVisible();
   });
 
   test("clicking Raise Ticket navigates to /internal/submit", async ({ page }) => {
@@ -56,7 +56,7 @@ test.describe("Internal tickets — list page", () => {
   test("shows empty state or ticket table", async ({ page }) => {
     await page.waitForLoadState("networkidle");
     // Either empty-state message or the table header must be present
-    const isEmpty = await page.getByText("No tickets yet").isVisible().catch(() => false);
+    const isEmpty = await page.getByText("No assigned tickets").isVisible().catch(() => false);
     const hasTable = await page.getByRole("columnheader", { name: "Title" }).isVisible().catch(() => false);
     expect(isEmpty || hasTable).toBe(true);
   });
@@ -96,19 +96,20 @@ test.describe("Internal tickets — submit form", () => {
 
     // Success state renders
     await expect(page.getByText("Ticket Submitted")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole("button", { name: "View My Tickets" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open Tickets" })).toBeVisible();
   });
 
-  test("after submission, ticket appears in My Tickets list", async ({ page }) => {
+  test("new tickets stay out of My Tickets until assigned", async ({ page }) => {
     const title = `E2E internal ticket ${Date.now()}`;
     await page.getByLabel("Title").fill(title);
     await page.getByLabel("Description").fill("Description for e2e test ticket");
     await page.getByRole("button", { name: /Submit Ticket/i }).click();
     await expect(page.getByText("Ticket Submitted")).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole("button", { name: "View My Tickets" }).click();
-    await expect(page).toHaveURL("/internal/tickets");
-    await expect(page.getByText(title)).toBeVisible({ timeout: 10000 });
+    await page.getByRole("button", { name: "Open Tickets" }).click();
+    await expect(page).toHaveURL("/tickets");
+    await page.goto("/internal/tickets");
+    await expect(page.getByText(title, { exact: true })).toHaveCount(0);
   });
 });
 
@@ -120,13 +121,16 @@ test.describe("Internal tickets — detail page", () => {
   test("can navigate from list to detail and see ticket title", async ({ page }) => {
     await loginAsAdmin(page);
 
-    // Submit a ticket first
     const title = `Detail test ${Date.now()}`;
-    await page.goto("/internal/submit");
-    await page.getByLabel("Title").fill(title);
-    await page.getByLabel("Description").fill("Detail page E2E test description");
-    await page.getByRole("button", { name: /Submit Ticket/i }).click();
-    await expect(page.getByText("Ticket Submitted")).toBeVisible({ timeout: 10000 });
+    const created = await page.request.post("/api/internal/tickets", {
+      data: { title, description: "Detail page E2E test description", type: "SUPPORT", priority: "MEDIUM" },
+    });
+    expect(created.status()).toBe(201);
+    const { ticketId } = await created.json();
+    const session = await page.request.get("/api/auth/get-session");
+    const { user } = await session.json();
+    const assigned = await page.request.patch(`/api/tickets/${ticketId}/assignee`, { data: { assignedToId: user.id } });
+    expect(assigned.ok()).toBe(true);
 
     // Navigate to list and click the ticket
     await page.goto("/internal/tickets");

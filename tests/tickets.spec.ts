@@ -14,7 +14,7 @@ const BASE           = (process.env.TEST_BACKEND_URL ?? "http://localhost:5001")
 // ---------------------------------------------------------------------------
 
 async function loginAsAdmin(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?account=local");
   await page.getByLabel("Email").fill(ADMIN_EMAIL);
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: "Sign In" }).click();

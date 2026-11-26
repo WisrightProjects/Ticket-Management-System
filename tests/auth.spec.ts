@@ -19,8 +19,14 @@ async function fillAndSubmitLogin(
  * Perform a full admin login and wait until the dashboard is visible.
  * Re-usable across test groups that need an authenticated starting state.
  */
+async function signOutFromAccountMenu(page: Page) {
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Sign out", exact: true }).click();
+}
+
 async function loginAsAdmin(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?account=local");
   await fillAndSubmitLogin(page, "admin@wisright.com", "Test@123");
   await expect(page).toHaveURL("/");
   await expect(
@@ -34,14 +40,14 @@ async function loginAsAdmin(page: Page) {
 
 test.describe("Login page rendering", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/login?account=local");
   });
 
   test("displays the login form with all required elements", async ({
     page,
   }) => {
     await expect(
-      page.getByRole("heading", { name: "Welcome back" })
+      page.getByRole("heading", { name: "Right Tracker sign in" })
     ).toBeVisible();
     await expect(page.getByLabel("Email address")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
@@ -79,7 +85,7 @@ test.describe("Successful login", () => {
   test("admin can log in with valid credentials and is redirected to dashboard", async ({
     page,
   }) => {
-    await page.goto("/login");
+    await page.goto("/login?account=local");
     await fillAndSubmitLogin(page, "admin@wisright.com", "Test@123");
 
     await expect(page).toHaveURL("/");
@@ -91,7 +97,7 @@ test.describe("Successful login", () => {
   test("Sign In button shows loading state while submitting", async ({
     page,
   }) => {
-    await page.goto("/login");
+    await page.goto("/login?account=local");
     await page.getByLabel("Email address").fill("admin@wisright.com");
     await page.getByLabel("Password").fill("Test@123");
 
@@ -123,7 +129,7 @@ test.describe("Successful login", () => {
 
 test.describe("Client-side form validation", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/login?account=local");
   });
 
   test("shows error when email field is left empty", async ({ page }) => {
@@ -197,13 +203,13 @@ test.describe("Client-side form validation", () => {
 
 test.describe("Server-side authentication errors", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/login?account=local");
   });
 
   test("shows error for wrong password", async ({ page }) => {
     await fillAndSubmitLogin(page, "admin@wisright.com", "WrongPass1");
     await expect(page.getByText(/invalid email or password/i)).toBeVisible();
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
   });
 
   test("shows error for non-existent email", async ({ page }) => {
@@ -213,7 +219,7 @@ test.describe("Server-side authentication errors", () => {
       "SomePassword1"
     );
     await expect(page.getByText(/invalid email or password/i)).toBeVisible();
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
   });
 
   test("shows error for correct email but entirely wrong password", async ({
@@ -286,27 +292,26 @@ test.describe("Logout", () => {
   test("Sign Out button is visible in the navbar when authenticated", async ({
     page,
   }) => {
-    await expect(
-      page.getByRole("button", { name: "Sign Out" })
-    ).toBeVisible();
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
   });
 
   test("clicking Sign Out redirects to the login page", async ({ page }) => {
-    await page.getByRole("button", { name: "Sign Out" }).click();
+    await signOutFromAccountMenu(page);
     await expect(page).toHaveURL("/login");
   });
 
-  test("after logout the login form is displayed", async ({ page }) => {
-    await page.getByRole("button", { name: "Sign Out" }).click();
+  test("after logout staff sign-in choices are displayed", async ({ page }) => {
+    await signOutFromAccountMenu(page);
     await expect(
-      page.getByRole("button", { name: "Sign In" })
+      page.getByRole("link", { name: "Continue with WiseWork" })
     ).toBeVisible();
   });
 
   test("after logout navigating to dashboard redirects back to login", async ({
     page,
   }) => {
-    await page.getByRole("button", { name: "Sign Out" }).click();
+    await signOutFromAccountMenu(page);
     await expect(page).toHaveURL("/login");
 
     await page.goto("/");
@@ -314,7 +319,7 @@ test.describe("Logout", () => {
   });
 
   test("session cookie is cleared after logout", async ({ page, context }) => {
-    await page.getByRole("button", { name: "Sign Out" }).click();
+    await signOutFromAccountMenu(page);
     await expect(page).toHaveURL("/login");
 
     const cookies = await context.cookies();
@@ -349,7 +354,7 @@ test.describe("Route protection for unauthenticated users", () => {
     await page.goto("/login");
     await expect(page).toHaveURL("/login");
     await expect(
-      page.getByRole("button", { name: "Sign In" })
+      page.getByRole("link", { name: "Continue with WiseWork" })
     ).toBeVisible();
   });
 });
@@ -366,7 +371,7 @@ test.describe("Route protection for authenticated users", () => {
   test("authenticated user visiting /login is redirected to dashboard", async ({
     page,
   }) => {
-    await page.goto("/login");
+    await page.goto("/login?account=local");
     await expect(page).toHaveURL("/");
   });
 });
@@ -421,7 +426,7 @@ test.describe("Navbar displays authenticated user info", () => {
 
 test.describe("Edge cases and security inputs", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/login?account=local");
   });
 
   test("SQL injection in email field does not authenticate", async ({
@@ -431,7 +436,7 @@ test.describe("Edge cases and security inputs", () => {
     await page.getByLabel("Email address").blur();
     // Client-side Zod email validation catches this before it reaches the server
     await expect(page.getByText("Enter a valid email")).toBeVisible();
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
   });
 
   test("SQL injection in password field does not authenticate", async ({
@@ -442,7 +447,7 @@ test.describe("Edge cases and security inputs", () => {
       "admin@wisright.com",
       "' OR '1'='1'; --"
     );
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
     await expect(page.getByText(/invalid email or password/i)).toBeVisible();
   });
 
@@ -453,7 +458,7 @@ test.describe("Edge cases and security inputs", () => {
       .getByLabel("Email address")
       .fill('<script>alert("xss")</script>@evil.com');
     await page.getByLabel("Email address").blur();
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
     // Script tag must not execute — page title must remain normal
     await expect(page).toHaveTitle(/Right Tracker/i);
   });
@@ -466,7 +471,7 @@ test.describe("Edge cases and security inputs", () => {
       "admin@wisright.com",
       '<script>alert("xss")</script>Pad1'
     );
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
     // Verify the page title is unchanged — no XSS took effect
     await expect(page).toHaveTitle(/Right Tracker/i);
   });
@@ -476,7 +481,7 @@ test.describe("Edge cases and security inputs", () => {
     // that the server rejects it (no user exists with this email)
     const longEmail = "a".repeat(200) + "@example.com";
     await fillAndSubmitLogin(page, longEmail, "SomePassword1");
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
     // Should not crash — either a validation or server error is acceptable
     await expect(page).toHaveTitle(/Right Tracker/i);
   });
@@ -485,7 +490,7 @@ test.describe("Edge cases and security inputs", () => {
     // server maxPasswordLength is 128 — password exceeds it
     const longPassword = "A1@" + "x".repeat(130);
     await fillAndSubmitLogin(page, "admin@wisright.com", longPassword);
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
     // Should stay on login — not crash. Server may return various error messages.
     await expect(page).toHaveTitle(/Right Tracker/i);
   });
@@ -536,7 +541,7 @@ test.describe("Edge cases and security inputs", () => {
   }) => {
     await page.getByLabel("Email address").fill("üser@münchen.de");
     await page.getByLabel("Email address").blur();
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?account=local");
     // Zod email validation will reject IDN addresses — no crash expected
     // (If the browser normalises the address and zod accepts it, that is
     //  also acceptable behaviour — the key requirement is no unhandled error)

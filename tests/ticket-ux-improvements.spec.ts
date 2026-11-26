@@ -7,7 +7,7 @@ const AGENT_PASSWORD = "Test@123";
 const BASE           = (process.env.TEST_BACKEND_URL ?? "http://localhost:5001").replace("localhost", "127.0.0.1");
 
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto("/login");
+  await page.goto("/login?account=local");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign In" }).click();
@@ -31,10 +31,10 @@ async function seedTicket(request: APIRequestContext): Promise<string> {
 // ── Suite 1: Sidebar nav by role ──────────────────────────────────────────────
 
 test.describe("Sidebar navigation by role", () => {
-  test("admin does NOT see My Tickets in sidebar", async ({ page }) => {
+  test("admin sees My Tickets in sidebar", async ({ page }) => {
     await loginAs(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     const sidebar = page.locator("aside");
-    await expect(sidebar.getByRole("link", { name: "My Tickets" })).not.toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "My Tickets" })).toBeVisible();
   });
 
   test("admin sees Raise Ticket in sidebar", async ({ page }) => {
@@ -55,10 +55,10 @@ test.describe("Sidebar navigation by role", () => {
     await expect(sidebar.getByRole("link", { name: "My Tickets" })).toBeVisible();
   });
 
-  test("agent does NOT see Raise Ticket in sidebar", async ({ page }) => {
+  test("local agent sees Raise Ticket in sidebar", async ({ page }) => {
     await loginAs(page, AGENT_EMAIL, AGENT_PASSWORD);
     const sidebar = page.locator("aside");
-    await expect(sidebar.getByRole("link", { name: "Raise Ticket" })).not.toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Raise Ticket" })).toBeVisible();
   });
 });
 

@@ -21,7 +21,7 @@ async function apiSignIn(request: APIRequestContext): Promise<void> {
 }
 
 async function loginAsAdmin(page: import("@playwright/test").Page) {
-  await page.goto("/login");
+  await page.goto("/login?account=local");
   await page.getByLabel("Email").fill(ADMIN_EMAIL);
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: "Sign In" }).click();
